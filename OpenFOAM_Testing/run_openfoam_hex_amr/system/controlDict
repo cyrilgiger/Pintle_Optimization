@@ -45,7 +45,7 @@ maxAlphaCo      0.5;
 maxDeltaT       1;
 
 startFrom       latestTime; // latestTime - Automatically picks up the latest saved time folder
-stopAt          endTime;   // to stop now: writeNow
+stopAt          endTime;    // to stop now: writeNow
 endTime         0.002;
 startTime       0.0;
 
