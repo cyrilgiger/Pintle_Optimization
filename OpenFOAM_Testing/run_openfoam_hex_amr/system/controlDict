@@ -46,44 +46,201 @@ maxDeltaT       1;
 
 startFrom       latestTime; // latestTime - Automatically picks up the latest saved time folder
 stopAt          endTime;   // to stop now: writeNow
-endTime         0.00165;
+endTime         0.002;
 startTime       0.0;
 
-// functions
-// {
-//     extractEulerianParticles1
-//     {
-//         // Mandatory entries
-//         type            extractEulerianParticles;
-//         libs            (fieldFunctionObjects);
-//         faceZone        collector;
-//         alpha           alpha.lox;
+functions
+{
+    planeDropletAnalysis
+    {
+        type            coded;
+        libs            ("libutilityFunctionObjects.so");
+        name            planeDropletAnalysis;
 
-//         // Optional entries
-//         alphaThreshold  0.1;
-//         nLocations      20;
-//         U               U;
-//         rho             rho;
-//         phi             phi;
-//         //minDiameter     1e-30;
-//         //maxDiameter     1e30;
+        // Controls when it runs
+        writeControl    timeStep;
+        writeInterval   1;
 
-//         // Optional (inherited) entries
-//         writePrecision   6;
-//         writeToFile      true;
-//         useUserTime      false;
+        codeExecute
+        #{
+            // -----------------------------------------------------------------
+            // 1. Grab the mesh from the OpenFOAM database automatically
+            // -----------------------------------------------------------------
+            const fvMesh& mesh = refCast<const fvMesh>(obr_);
 
-//         region          region0;
-//         enabled         false;
-//         log             true;
-//         timeStart       0;
-//         timeEnd         1000;
-//         executeControl  timeStep;
-//         executeInterval 1;
-//         writeControl    writeTime;
-//         writeInterval   -1;
-//     }
-// }
+            // -----------------------------------------------------------------
+            // 2. Fetch required fields straight from the mesh memory
+            // -----------------------------------------------------------------
+            // Change "alpha.water" to match your phase fraction field name if needed
+            const volScalarField& alpha = mesh.lookupObject<volScalarField>("alpha.lox");
+            // const volVectorField& U     = mesh.lookupObject<volVectorField>("U");
+
+            // -----------------------------------------------------------------
+            // 3. Create your local vofID field (no OOP class required!)
+            // -----------------------------------------------------------------
+            volScalarField vofID
+            (
+                IOobject
+                (
+                    "vofID_local",
+                    mesh.time().timeName(),
+                    mesh,
+                    IOobject::NO_READ,
+                    IOobject::NO_WRITE
+                ),
+                mesh,
+                dimensionedScalar("zero", dimless, 0.0)
+            );
+
+            // Plane parameters
+            scalar plane_x = 25e-3; // plane distance downstream
+            scalar alphaLimit = 0.002;
+            
+            // check connection helper function
+            auto checkConnection = [&](const label startCell, const scalar currentID)
+            {
+                vofID[startCell] = currentID;
+
+                DynamicList<label> cells(0);
+                cells.append(mesh.cellCells()[startCell]); // get neighbors of start cell (cellCells)
+
+                while (cells.size() > 0)
+                {
+                    DynamicList<label> neighbours(0);
+
+                    forAll(cells, i)
+                    {
+                        label cellI = cells[i];
+                        // if liquid and different from the current cell cluster
+                        if (alpha[cellI] > alphaLimit && mag(vofID[cellI] - currentID) > 0.1)
+                        {
+                            vofID[cellI] = currentID;
+                            neighbours.append(mesh.cellCells()[cellI]);
+                        }
+                    }
+                    cells.clear();
+                    cells.transfer(neighbours);
+                }
+            };
+
+            // -----------------------------------------------------------------
+            // 4. Global Connected Component Labeling (CCL)
+            // -----------------------------------------------------------------
+            globalIndex globalNumbering(mesh.nCells());
+
+            forAll(mesh.cells(), cellI)
+            {
+                label globalCellID = globalNumbering.toGlobal(cellI);
+
+                // If cell has fluid and hasn't been tagged yet - i.e. vofID[cellI] = 0, and then unique cell label i different from 0
+                if (alpha[cellI] > alphaLimit && mag(vofID[cellI]) < 0.1)
+                {
+                    checkConnection(cellI, scalar(globalCellID + 1));
+                }
+            }
+            vofID.correctBoundaryConditions();
+
+            // Parallel boundary corrections across processors
+            label corr = Foam::log(scalar(Pstream::nProcs())) / Foam::log(2.0) + 1;
+            for (int i = 0; i <= corr; i++)
+            {
+                forAll(mesh.boundary(), patchI)
+                {
+                    const fvPatch& pPatch = mesh.boundary()[patchI];
+                    if (pPatch.coupled())
+                    {
+                        forAll(pPatch, faceI)
+                        {
+                            const scalar ID_own = vofID.boundaryField()[patchI].patchInternalField()()[faceI];
+                            const scalar ID_nei = vofID.boundaryField()[patchI].patchNeighbourField()()[faceI];
+
+                            if ((ID_nei > 0.1) && (ID_own > 0.1) && (mag(ID_nei - ID_own) > 0.1))
+                            {
+                                scalar minID = Foam::min(ID_own, ID_nei);
+                                scalar maxID = Foam::max(ID_own, ID_nei);
+                                scalar diff = maxID - minID;
+
+                                volScalarField filtered = diff
+                                    * pos(vofID - maxID + 0.1)
+                                    * pos(-vofID + maxID + 0.1);
+
+                                vofID -= filtered;
+                            }
+                        }
+                    }
+                }
+                vofID.correctBoundaryConditions();
+            }
+
+            // Renumber unique continuous IDs from largest ID to smallest
+            {
+                volScalarField tmp(vofID);
+                vofID = 0.0;
+                scalar maxID = gMax(tmp);
+                int iter = 1;
+                while (maxID > 0.1)
+                {
+                    volScalarField curVolID = pos(tmp - maxID + 0.1); // mask for only cells from droplet maxID
+                    vofID += iter * curVolID;
+                    tmp -= maxID * curVolID; // remove maxID cells from tmp vofID
+                    maxID = gMax(tmp);
+                    iter++;
+                }
+            }
+
+            // -----------------------------------------------------------------
+            // 5. Plane Intersection & Equivalent Diameter Calculation
+            // -----------------------------------------------------------------
+            label maxID = floor(gMax(vofID) + 0.5);
+            scalarList volume(maxID + 1, scalar(0));
+            boolList localIntersectsPlane(maxID + 1, false);
+
+            forAll(mesh.cells(), cellI)
+            {
+                if (vofID[cellI] > 0.1) // if cell is part of a droplet (since all non droplet cells have vofID = 0)
+                {
+                    label volID = floor(vofID[cellI] + 0.5); // convert float to integer
+                    volume[volID] += alpha[cellI] * mesh.V()[cellI];
+
+                    // Plane proximity check (+/- 0.5 * dx)
+                    scalar dist = mag(mesh.C()[cellI][0] - plane_x);
+                    scalar dx   = Foam::cbrt(mesh.V()[cellI]);
+
+                    if (dist <= 0.5 * dx)
+                    {
+                        localIntersectsPlane[volID] = true;
+                    }
+                }
+            }
+
+            // Reduce data across parallel ranks
+            reduce(volume, sumOp<scalarList>()); // sum up volumes calculated on each processor
+            
+            labelList globalIntersects(maxID + 1, 0); // convert to label list for reduction ("globalization") of array
+            forAll(localIntersectsPlane, i)
+            {
+                globalIntersects[i] = localIntersectsPlane[i] ? 1 : 0;
+            }
+            reduce(globalIntersects, maxOp<labelList>()); // check if droplet crossed plane on any processor
+
+            // Print output on master node
+            if (Pstream::master())
+            {
+                Info << "\n--- Plane Droplet Sizes (x = " << plane_x << " m) ---" << endl;
+                for (label i = 1; i <= maxID; i++)
+                {
+                    if (globalIntersects[i] == 1 && volume[i] > VSMALL)
+                    {
+                        scalar d_eq_mm = cbrt(6.0 * volume[i] / constant::mathematical::pi) * 1000.0;
+                        Info << "Droplet ID " << i 
+                             << " | Volume: " << volume[i] << " m3"
+                             << " | Equivalent Diameter: " << d_eq_mm << " mm" << endl;
+                    }
+                }
+            }
+        #};
+    }
+}
 
 
 // ************************************************************************* //

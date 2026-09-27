@@ -32,7 +32,7 @@ phaseCoupling
     active          on;
 
     // Start time
-    startTime       1e-6;
+    startTime       1e-4;
 
     // Interval for converting droplets
     nInterval       20;

@@ -46,4 +46,4 @@ print("⚡ Decomposing into processors")
 subprocess.run("decomposePar >> log.init 2>&1", shell=True, check=True)
 
 print("🌟 Start time loop")
-subprocess.run("mpirun -np 6 atomizationFoam -parallel > log.atomizationFoam 2>&1", shell=True, check=True) 
+subprocess.run("mpirun -np 6 atomizationFoam -parallel > log.atomizationFoam 2>&1", shell=True, check=True)

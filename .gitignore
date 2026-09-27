@@ -19,6 +19,7 @@ dynamicCode/
 *.unv
 *.med
 polyMesh/
+triSurface/
 
 # Logs & System Files
 log.*
