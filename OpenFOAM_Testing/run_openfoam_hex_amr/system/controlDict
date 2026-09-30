@@ -175,8 +175,8 @@ functions
             // Renumber unique continuous IDs from largest ID to smallest
             {
                 volScalarField tmp(vofID);
-                vofID = 0.0;
                 scalar maxID = gMax(tmp);
+                vofID = 0.0;
                 int iter = 1;
                 while (maxID > 0.1)
                 {
@@ -187,24 +187,35 @@ functions
                     iter++;
                 }
             }
+            label maxID = label(round(gMax(vofID)));
 
             // -----------------------------------------------------------------
             // 5. Plane Intersection & Equivalent Diameter Calculation
             // -----------------------------------------------------------------
-            label maxID = floor(gMax(vofID) + 0.5);
-            scalarList volume(maxID + 1, scalar(0));
+            tmp<volScalarField> tmagGradAlpha = Foam::mag(fvc::grad(alpha));
+            const scalarField& magGradAlphaI = tmagGradAlpha().primitiveField();
+            const scalarField& alphaI        = alpha.primitiveField();
+            const scalarField& V             = mesh.V();
+            const pointField&  C             = mesh.C().primitiveField();
+            const scalarField& vofIDI        = vofID.primitiveField();
+            
+            scalarField volume(maxID + 1, 0.0);
+            scalarField surface(maxID + 1, 0.0);
             boolList localIntersectsPlane(maxID + 1, false);
 
             forAll(mesh.cells(), cellI)
             {
-                if (vofID[cellI] > 0.1) // if cell is part of a droplet (since all non droplet cells have vofID = 0)
+                if (vofIDI[cellI] > 0.1) // Cell is part of a droplet
                 {
-                    label volID = floor(vofID[cellI] + 0.5); // convert float to integer
-                    volume[volID] += alpha[cellI] * mesh.V()[cellI];
+                    label volID = label(round(vofIDI[cellI]));
+
+                    // Accumulate volume & surface area
+                    volume[volID]  += alphaI[cellI] * V[cellI];
+                    surface[volID] += magGradAlphaI[cellI] * V[cellI];
 
                     // Plane proximity check (+/- 0.5 * dx)
-                    scalar dist = mag(mesh.C()[cellI][0] - plane_x);
-                    scalar dx   = Foam::cbrt(mesh.V()[cellI]);
+                    scalar dist = mag(C[cellI].x() - plane_x);
+                    scalar dx   = Foam::cbrt(V[cellI]);
 
                     if (dist <= 0.5 * dx)
                     {
@@ -215,6 +226,7 @@ functions
 
             // Reduce data across parallel ranks
             reduce(volume, sumOp<scalarList>()); // sum up volumes calculated on each processor
+            reduce(surface, sumOp<scalarList>());
             
             labelList globalIntersects(maxID + 1, 0); // convert to label list for reduction ("globalization") of array
             forAll(localIntersectsPlane, i)
@@ -226,21 +238,31 @@ functions
             // Print output on master node
             if (Pstream::master())
             {
-                Info << "\n--- Plane Droplet Sizes (x = " << plane_x << " m) ---" << endl;
+                // Creates or appends to "plane_droplets.csv" in the case directory
+                fileName outputDir = mesh.time().globalPath() / "postProcessing";
+                mkDir(outputDir);
+                
+                OFstream outFile(outputDir / "plane_droplets.csv", IOstreamOption(), IOstreamOption::APPEND);
+
+                // Optional: write CSV header if starting a new file
+                if (mesh.time().timeIndex() == 1)
+                {
+                    outFile << "t,DropletID,V,A" << endl;
+                }
+
                 for (label i = 1; i <= maxID; i++)
                 {
-                    if (globalIntersects[i] == 1 && volume[i] > VSMALL)
+                    if (globalIntersects[i] && volume[i] > VSMALL)
                     {
-                        scalar d_eq_mm = cbrt(6.0 * volume[i] / constant::mathematical::pi) * 1000.0;
-                        Info << "Droplet ID " << i 
-                             << " | Volume: " << volume[i] << " m3"
-                             << " | Equivalent Diameter: " << d_eq_mm << " mm" << endl;
+                        outFile << mesh.time().value() << ","
+                                << i << ","
+                                << volume[i] << ","
+                                << surface[i] << endl;
                     }
                 }
             }
         #};
     }
 }
-
 
 // ************************************************************************* //

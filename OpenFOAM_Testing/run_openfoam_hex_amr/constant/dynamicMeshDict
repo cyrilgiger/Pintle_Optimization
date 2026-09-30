@@ -28,7 +28,7 @@ dynamicRefineFvMeshCoeffs
     upperRefineLevel 1.0;
 
     // Unrefine cells when interface leaves and value drops below threshold
-    // unrefineLevel    0.01;
+    unrefineLevel    0.05;
 
     // Transition buffer layers
     nBufferLayers    6;
