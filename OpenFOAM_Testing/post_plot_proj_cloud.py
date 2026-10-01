@@ -33,7 +33,7 @@ proc_dir_pattern = "processor*"
 
 proc_dirs = [p for p in base_dir.glob(proc_dir_pattern)]
 
-time_str = "0.00135"
+time_str = "0.00185"
 
 # load particle positions
 ppos_cart = []
@@ -73,29 +73,29 @@ th_m = np.arctan((r_fit[-1] - r_fit[0]) / (x_fit[-1] - x_fit[0]))
 
 x_bins = np.linspace(0, xmax, 100)
 x_c = (x_bins[1:] + x_bins[:-1])/2
-r95 = []
-x95 = []
+r99 = []
+x99 = []
 
 for i in range(x_bins.shape[0] - 1):
     bin_mask = (ppos_proj[:,0] > x_bins[i]) & (ppos_proj[:,0] < x_bins[i+1])
     if sum(bin_mask) > 5:
-        r95.append(np.percentile(ppos_proj[bin_mask, 1], 95))
-        x95.append(x_c[i])
+        r99.append(np.percentile(ppos_proj[bin_mask, 1], 99))
+        x99.append(x_c[i])
 
-x95 = np.array(x95).reshape(-1,1)
-r95 = np.array(r95).reshape(-1,1)
+x99 = np.array(x99).reshape(-1,1)
+r99 = np.array(r99).reshape(-1,1)
 
-x95_s = x95 - x0
-r95_s = r95 - r0
+x99_s = x99 - x0
+r99_s = r99 - r0
 
-reg95_s = LinearRegression(fit_intercept=False).fit(x95_s, r95_s)
-r95_fit = reg95_s.predict(x_fit - x0) + r0
-th_95 = np.arctan((r95_fit[-1] - r95_fit[0]) / (x_fit[-1] - x_fit[0]))
+reg99_s = LinearRegression(fit_intercept=False).fit(x99_s, r99_s)
+r99_fit = reg99_s.predict(x_fit - x0) + r0
+th_99 = np.arctan((r99_fit[-1] - r99_fit[0]) / (x_fit[-1] - x_fit[0]))
 
 plt.figure()
 plt.scatter(ppos_proj[:, 0], ppos_proj[:, 1], s=3, label='Droplets', zorder=2)
 plt.plot(x_fit, r_fit, color="red", label="Mean Regression")
-plt.plot(x_fit, r95_fit, color="orange", label="95th Percentile Regression")
+plt.plot(x_fit, r99_fit, color="orange", label="99th Percentile Regression")
 plt.xlabel('Axial Position $x$ [m]')
 plt.ylabel('Radial Position $r$ [m]')
 plt.title(f'Droplet Cloud Projection ($r$ vs $x$) for {ppos_cart.shape[0]:,.0f} particles')
@@ -104,7 +104,7 @@ plt.grid(which='major', color='#dbdada', linestyle='-', alpha=0.7)
 plt.grid(which='minor', color='#dbdada', linestyle=':', alpha=0.5)
 text_str = (
     fr'$\theta_m: {np.rad2deg(th_m).item():.2f}^\circ$' '\n'
-    fr'$\theta_{{95}}: {np.rad2deg(th_95).item():.2f}^\circ$')
+    fr'$\theta_{{95}}: {np.rad2deg(th_99).item():.2f}^\circ$')
 plt.text(
     0.95, 0.05, 
     text_str, 
