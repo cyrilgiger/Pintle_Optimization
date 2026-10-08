@@ -45,7 +45,7 @@ maxAlphaCo      0.5;
 maxDeltaT       1;
 
 startFrom       latestTime; // latestTime - Automatically picks up the latest saved time folder
-stopAt          writeNow;    // to stop now: writeNow
+stopAt          endTime;    // to stop now: writeNow
 endTime         0.002;
 startTime       0.0;
 
@@ -242,7 +242,7 @@ functions
 
                 if (mesh.time().timeIndex() == 1)
                 {
-                    outFile << "t,DropletID,V,A" << endl;
+                    outFile << "t,DropletID,x,y,z,V,A" << endl;
                 }
 
                 for (label i = 1; i <= maxID; i++)
@@ -261,6 +261,9 @@ functions
                         {
                             outFile << currentTime << ","
                                     << i << ","
+                                    << pos.x() << ","
+                                    << pos.y() << ","
+                                    << pos.z() << ","
                                     << volume[i] << ","
                                     << surface[i] << endl;
                         }

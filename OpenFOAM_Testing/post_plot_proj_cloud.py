@@ -104,7 +104,7 @@ plt.grid(which='major', color='#dbdada', linestyle='-', alpha=0.7)
 plt.grid(which='minor', color='#dbdada', linestyle=':', alpha=0.5)
 text_str = (
     fr'$\theta_m: {np.rad2deg(th_m).item():.2f}^\circ$' '\n'
-    fr'$\theta_{{95}}: {np.rad2deg(th_99).item():.2f}^\circ$')
+    fr'$\theta_{{99}}: {np.rad2deg(th_99).item():.2f}^\circ$')
 plt.text(
     0.95, 0.05, 
     text_str, 
