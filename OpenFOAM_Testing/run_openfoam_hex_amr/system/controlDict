@@ -38,7 +38,7 @@ runTimeModifiable yes;
 
 adjustTimeStep  yes;
 
-maxCo           0.7;
+maxCo           1.0;
 
 maxAlphaCo      0.5;
 
@@ -53,6 +53,7 @@ functions
 {
     planeDropletAnalysis
     {
+        enabled         false;
         type            coded;
         libs            ("libutilityFunctionObjects.so");
         name            planeDropletAnalysis;
@@ -61,7 +62,10 @@ functions
         writeControl    outputTime;
 
         codeExecute
-        #{
+        #{  
+            // Analysis parameters
+            scalar plane_x    = 35e-3;
+            scalar alphaLimit = 0.002;
             // -----------------------------------------------------------------
             // 1. Mesh and Time setup
             // -----------------------------------------------------------------
@@ -99,10 +103,6 @@ functions
                 mesh,
                 dimensionedScalar("zero", dimless, 0.0)
             );
-
-            // Analysis parameters
-            scalar plane_x    = 35e-3;
-            scalar alphaLimit = 0.002;
 
             // Connected Component Labeling (CCL) helper
             auto checkConnection = [&](const label startCell, const scalar currentID)

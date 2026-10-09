@@ -13,8 +13,8 @@ if ipython is not None:
 
 #%% Inputs
 
-sim_dir = Path(__file__).parent.resolve() / "run_openfoam_hex_amr"
-plane_x = 35e-3  # only applied to lagrangian clouds !! for vof check controlDict/functions
+sim_dir = Path(__file__).parent.resolve() / "hpc_run"
+plane_x = 25e-3  # only applied to lagrangian clouds !! for vof check controlDict/functions
 
 #%% Import VOF stats on plane
 

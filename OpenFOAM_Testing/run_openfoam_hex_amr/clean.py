@@ -13,11 +13,18 @@ for proc_dir in case_dir.glob("processor*"):
         shutil.rmtree(proc_dir)
         print(f"  - Removed: {proc_dir.name}")
 
-# 2. Remove log files
+# 2. Remove openfoam log files
 for log_file in case_dir.glob("log.*"):
     if log_file.is_file():
         log_file.unlink()
         print(f"  - Removed: {log_file.name}")
+
+# Remove slurm log files
+for pattern in ("job_*.err", "job_*.log"):
+    for log_file in case_dir.glob(pattern):
+        if log_file.is_file():
+            log_file.unlink()
+            print(f"  - Removed: {log_file.name}")
 
 # 3. Remove generated time directories (e.g. 0.001, 1, 2)
 for item in case_dir.iterdir():

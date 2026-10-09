@@ -28,12 +28,12 @@ def read_openfoam_positions(filepath):
     return np.array(positions)
 #____________________________________________________________________________
 
-base_dir = Path(__file__).parent.resolve() / Path("run_openfoam_hex_amr/")
+base_dir = Path(__file__).parent.resolve() / Path("hpc_run/")
 proc_dir_pattern = "processor*"
 
 proc_dirs = [p for p in base_dir.glob(proc_dir_pattern)]
 
-time_str = "0.00185"
+time_str = "0.00165"
 
 # load particle positions
 ppos_cart = []

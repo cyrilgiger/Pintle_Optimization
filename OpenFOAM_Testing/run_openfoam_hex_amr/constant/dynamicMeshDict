@@ -24,17 +24,17 @@ dynamicRefineFvMeshCoeffs
     field           alpha.lox;
 
     // Refine cells where 0.001 < alpha.lox < 0.999
-    lowerRefineLevel 0.1;
-    upperRefineLevel 1.0;
+    lowerRefineLevel 0.01;
+    upperRefineLevel 0.99;
 
     // Unrefine cells when interface leaves and value drops below threshold
-    unrefineLevel    0.05;
+    unrefineLevel    10.0;
 
     // Transition buffer layers
-    nBufferLayers    6;
+    nBufferLayers    3;
 
     // Max refinement cuts per cell
-    maxRefinement    3;
+    maxRefinement    4;
 
     // Stop refinement if maxCells reached
     maxCells         5000000;

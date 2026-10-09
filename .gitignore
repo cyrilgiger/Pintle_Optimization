@@ -32,3 +32,6 @@ log.*
 *.jpg
 *.png
 *.mp4
+
+# hpc temp files
+hpc_run/
