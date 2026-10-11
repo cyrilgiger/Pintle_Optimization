@@ -14,14 +14,6 @@ FoamFile
 }
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-FoamFile
-{
-    version     2.0;
-    format      ascii;
-    class       dictionary;
-    object      snappyHexMeshDict;
-}
-
 castellatedMesh true;
 snap            true;
 addLayers       false;
@@ -62,7 +54,7 @@ castellatedMeshControls
             regions
             {
                 wall_ch      { level (1 1); patchInfo { type wall; } }
-                wall_of      { level (3 3); patchInfo { type wall; } }
+                wall_of      { level (4 4); patchInfo { type wall; } }
                 wall_i       { level (2 2); patchInfo { type wall; } }
                 inlet_o      { level (3 3); patchInfo { type patch; } }
                 inlet_f      { level (3 3); patchInfo { type patch; } }
@@ -85,12 +77,12 @@ castellatedMeshControls
 
 snapControls
 {
-    nSolveIter 50;
+    nSolveIter 100;
     relaxIter 5;
     coordExponent 2;
     backOffFact 0.2;
-    tolerance 1.0;
-    nFeatureSnapIter 10;
+    tolerance 2.0;
+    nFeatureSnapIter 20;
     nSmoothPatch 3;
     nRelaxIter 5;
     implicitFeatureSnap false;
@@ -121,6 +113,8 @@ meshQualityControls
 
     relaxed
     {
-        maxNonOrtho 75;
+        maxNonOrtho 85;
+        maxBoundarySkewness 40;
+        minDeterminant 0.00001;
     }
 }

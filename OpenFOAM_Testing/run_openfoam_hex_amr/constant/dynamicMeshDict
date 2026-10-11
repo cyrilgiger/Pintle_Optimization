@@ -13,7 +13,11 @@ FoamFile
     object      dynamicMeshDict;
 }
 
+// dynamicFvMesh   dynamicMultiDimRefineBalancedFvMesh; //dynamicMultiDimRefineFvMesh
 dynamicFvMesh   dynamicRefineFvMesh;
+
+// enableBalancing true;
+// allowableImbalance 0.10;
 
 dynamicRefineFvMeshCoeffs
 {
@@ -57,3 +61,79 @@ dynamicRefineFvMeshCoeffs
 }
 
 // ************************************************************************* //
+
+// /*--------------------------------*- C++ -*----------------------------------*\
+// | =========                                                                   |
+// | \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+// |  \\    /   O peration     | Version:  v2406                                 |
+// |   \\  /    A nd           | Website:  www.openfoam.com                      |
+// |    \\/     M anipulation  |                                                 |
+// \*---------------------------------------------------------------------------*/
+// FoamFile
+// {
+//     version     2.0;
+//     format      ascii;
+//     class       dictionary;
+//     location    "constant";
+//     object      dynamicMeshDict;    
+// }
+// // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// dynamicFvMesh   dynamicMultiDimRefineBalancedFvMesh;
+
+// enableBalancing true;
+// allowableImbalance 0.10;
+
+// adaptCriteria
+// {
+//     type composedAdaptCriteria;
+//     operation or;
+//     criteria
+//     (
+//         // Refine the spray/liquid-gas interface
+//         interface
+//         {
+//             type        fieldBounds;
+//             fieldName   alpha.lox;
+//             lowerBound  0.001;
+//             upperBound  0.999;
+//             nLayer      2;
+//         }
+//         // // Optionally refine bulk fluid regions if needed
+//         // fluid
+//         // {
+//         //     type        fieldBounds;
+//         //     fieldName   alpha.lox;
+//         //     lowerBound  0.999999;
+//         //     upperBound  2;
+//         // }
+//     );
+// }
+
+// // How often to refine
+// refineInterval  20;
+
+// // Have slower than 2:1 refinement
+// nBufferLayers   3;
+
+// // Refine cells only up to maxRefinement levels
+// maxRefinement   4;
+
+// // Stop refinement if maxCells reached
+// maxCells        5000000;
+
+// // Flux field and corresponding velocity field.
+// correctFluxes
+// (
+//     (phi none)
+//     (nHatf none)
+//     (rhoPhi none)
+//     (ghf none)
+//     (dVf_ none)
+//     (alphaPhi_ none)
+// );
+
+// // Write the refinement level as a volScalarField
+// dumpLevel       true;
+
+// // ************************************************************************* //

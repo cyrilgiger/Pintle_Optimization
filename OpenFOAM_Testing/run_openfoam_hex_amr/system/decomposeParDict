@@ -27,4 +27,14 @@ method          scotch;
 //     }
 // }
 
+// constraints
+// {
+//     refinementHistoryMultiDim
+//     {
+//         //- Decompose cells such that all cell originating from single cell
+//         //  end up on same processor
+//         type    refinementHistoryMultiDim;
+//     }
+// }
+
 // ************************************************************************* //

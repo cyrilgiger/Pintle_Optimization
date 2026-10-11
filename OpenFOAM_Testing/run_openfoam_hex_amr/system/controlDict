@@ -1,26 +1,26 @@
 /*--------------------------------*- C++ -*----------------------------------*\
 | =========                 |                                                 |
 | \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
-|  \\    /   O peration     | Version:  v2406                                 |
+|  \\    /   O peration     | Version:  2406                                  |
 |   \\  /    A nd           | Website:  www.openfoam.com                      |
 |    \\/     M anipulation  |                                                 |
 \*---------------------------------------------------------------------------*/
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 FoamFile
 {
-    version     2.0;
-    format      ascii;
-    class       dictionary;
-    object      controlDict;
+    version         2;
+    format          ascii;
+    class           dictionary;
+    object          controlDict;
 }
-// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 application     atomizationFoam;
 
-deltaT          1e-5;
+deltaT          1e-05;
 
 writeControl    adjustable;
 
-writeInterval   0.5e-4;
+writeInterval   5e-05;
 
 purgeWrite      0;
 
@@ -38,16 +38,19 @@ runTimeModifiable yes;
 
 adjustTimeStep  yes;
 
-maxCo           1.0;
+maxCo           1;
 
 maxAlphaCo      0.5;
 
 maxDeltaT       1;
 
-startFrom       latestTime; // latestTime - Automatically picks up the latest saved time folder
-stopAt          endTime;    // to stop now: writeNow
-endTime         0.002;
-startTime       0.0;
+startFrom       latestTime;
+
+stopAt          endTime;
+
+endTime         0.0005;
+
+startTime       0;
 
 functions
 {
@@ -55,14 +58,10 @@ functions
     {
         enabled         false;
         type            coded;
-        libs            ("libutilityFunctionObjects.so");
+        libs            ( "libutilityFunctionObjects.so" );
         name            planeDropletAnalysis;
-
-        // Executes only at write/output intervals
         writeControl    outputTime;
-
-        codeExecute
-        #{  
+        codeExecute     #{  
             // Analysis parameters
             scalar plane_x    = 35e-3;
             scalar alphaLimit = 0.002;
@@ -273,5 +272,6 @@ functions
         #};
     }
 }
+
 
 // ************************************************************************* //
