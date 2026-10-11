@@ -63,15 +63,15 @@ else:
 
 print("🌟 Start time loop")
 end_time = 0.002
-balance_int = 1e-4
+balance_int = 5e-4
 current_time = latest_time()
 ctrl_dict = case_dir / "system/controlDict"
 while current_time < end_time - 1e-10:
-    if round(current_time % balance_int, ndigits=6):
+    if not ((current_time % balance_int) < 1e-7 or (balance_int - (current_time % balance_int)) < 1e-7):
         next_time = math.ceil(current_time / balance_int) * balance_int
-        print(f"Detected unfinished iteration - continueing to: {next_time:.3g}")
+        print(f"Detected unfinished iteration - continueing: {current_time:.3g} -> {next_time:.3g}")
     else:
-        next_time = current_time + balance_int
+        next_time = (round(current_time / balance_int) + 1) * balance_int
 
     subprocess.run(f"foamDictionary {str(ctrl_dict)} -entry endTime -set {next_time:.16g}", shell=True, check=True)
     subprocess.run("mpirun -np 6 atomizationFoam -parallel > log.atomizationFoam 2>&1", shell=True, check=True)
