@@ -14,7 +14,7 @@ if ipython is not None:
 #%% Inputs
 
 sim_dir = Path(__file__).parent.resolve() / "hpc_run"
-plane_x = 25e-3  # only applied to lagrangian clouds !! for vof check controlDict/functions
+plane_x = 30e-3  # only applied to lagrangian clouds !! for vof check controlDict/functions
 
 #%% Import VOF stats on plane
 
@@ -116,9 +116,13 @@ for proc_dir in proc_dirs:
         t_val = float(t_str)
         lag_dir = proc_dir / t_str / "lagrangian/dropletCloud/"
         if not os.path.exists(lag_dir):
+            print(f"Didnt find lagrangian directory in {proc_dir} at time {t_str}")
             continue
         d_file = lag_dir / "d"
         pos_file = lag_dir / "positions"
+        if not os.path.exists(pos_file):
+            print(f"Didnt find positions file in {proc_dir} at time {t_str}")
+            continue
         origId_file = lag_dir / "origId"
         origProcId_file = lag_dir / "origProcId"
         d_vals = read_openfoam_diameters(d_file)
@@ -182,6 +186,7 @@ plt.grid(which='major', color='#dbdada', linestyle='-', alpha=0.7)
 plt.grid(which='minor', color='#dbdada', linestyle=':', alpha=0.5)
 plt.legend()
 plt.tight_layout()
+plt.gca().ticklabel_format(style='sci', axis='x', scilimits=(0, 0))
 plt.savefig("images/SMD_plot.png", dpi=300, bbox_inches="tight")
 plt.show()
 
