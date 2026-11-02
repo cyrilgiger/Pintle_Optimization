@@ -16,7 +16,7 @@ smeshpy = smeshBuilder.New()
 
 # Pintle Post Values
     # Overall Dimensions
-L_p = 55.5e-3           # [m]  , Skip length of pintle post
+L_p = 35.0e-3           # [m]  , Skip length of pintle post
 D_p = 35e-3             # [m]  , Pintle post external diameter
 w_p = 2.5e-3            # [m]  , Pintle post wall thickness
     # Fluid Guide
@@ -37,7 +37,7 @@ d_r = 4.0e-3            # [m]  , Orifice row spacing
 t_a = 0.90e-3           # [m]  , Fuel annulus thickness
 
 # Domain Dimensions
-L_d = 100.00e-3         # [m]  , Domain length
+L_d = 70.00e-3         # [m]  , Domain length
 D_d = 110.85e-3         # [m]  , Domain diameter
 L_x = 10e-3             # [m]  , extension of ox and f channels in -x
 

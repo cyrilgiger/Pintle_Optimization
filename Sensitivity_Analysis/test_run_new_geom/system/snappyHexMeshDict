@@ -1,0 +1,120 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2406                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      snappyHexMeshDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+castellatedMesh true;
+snap            true;
+addLayers       false;
+
+mergeTolerance  1e-6;
+
+geometry
+{
+    pintle.stl
+    {
+        type triSurfaceMesh;
+        name fluidDomain;
+    }
+}
+
+castellatedMeshControls
+{
+    maxLocalCells 1000000;
+    maxGlobalCells 4000000;
+    minRefinementCells 10;
+    nCellsBetweenLevels 4;
+
+    allowFreeStandingZoneFaces true;
+
+    features
+    (
+        {
+            file "pintle.eMesh";
+            level 1;
+        }
+    );
+
+    refinementSurfaces
+    {
+        fluidDomain
+        {
+            level (1 1);
+            regions
+            {
+                wall_ch      { level (1 1); patchInfo { type wall; } }
+                wall_i       { level (4 4); patchInfo { type wall; } }
+                wall_orifice { level (4 4); patchInfo { type wall; } }
+                inlet_o      { level (1 1); patchInfo { type patch; } }
+                inlet_f      { level (1 1); patchInfo { type patch; } }
+                outlet       { level (1 1); patchInfo { type patch; } }
+                periodic_0   { level (1 1); patchInfo { type patch; } }
+                periodic_rev { level (1 1); patchInfo { type patch; } }
+            }
+            gapLevelIncrement 2;
+        }
+    }
+
+    refinementRegions
+    {
+    }
+
+    resolveFeatureAngle 30;
+
+    locationInMesh (0.060 0.01 0);
+}
+
+snapControls
+{
+    nSolveIter 100;
+    relaxIter 5;
+    coordExponent 2;
+    backOffFact 0.2;
+    tolerance 1.0;
+    nFeatureSnapIter 20;
+    nSmoothPatch 5;
+    nRelaxIter 5;
+    implicitFeatureSnap false;
+    explicitFeatureSnap true;
+    multiRegionFeatureSnap true;
+}
+
+addLayersControls {}
+
+meshQualityControls
+{
+    maxNonOrtho 65;
+    maxBoundarySkewness 20;
+    maxInternalSkewness 4;
+    maxConcave 80;
+    minFlatness 0.5;
+    minVol 1e-13;
+    minTetQuality 1e-13;
+    minArea -1;
+    minTwist 0.05;
+    minDeterminant 0.001;
+    minFaceWeight 0.05;
+    minVolRatio 0.01;
+    minTriangleTwist -1;
+
+    nSmoothScale 4;
+    errorReduction 0.75;
+
+    relaxed
+    {
+        maxNonOrtho 85;
+        maxBoundarySkewness 40;
+        minDeterminant 0.00001;
+    }
+}
