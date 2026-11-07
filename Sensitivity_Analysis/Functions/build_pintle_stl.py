@@ -351,16 +351,16 @@ def build_pintle_stl(
     ]
 
     wall_ch_edges = [
-        edge_e[1],  # injector face at x = 0
         edge_e[2]   # cylindrical chamber wall
     ]
 
     patch_faces = {
         "wall_i": get_revolved_faces(wall_i_edges),
+        "wall_inj_pl": edge_e[1],                       # injector face at x = 0
         "wall_ch": get_revolved_faces(wall_ch_edges),
-        "inlet_o": get_revolved_faces([edge_i[5]]), # oxygen inlet plane
-        "inlet_f": get_revolved_faces([edge_e[7]]), # fuel inlet plane
-        "outlet": get_revolved_faces([edge_e[3]]),  # outlet plane
+        "inlet_o": get_revolved_faces([edge_i[5]]),     # oxygen inlet plane
+        "inlet_f": get_revolved_faces([edge_e[7]]),     # fuel inlet plane
+        "outlet": get_revolved_faces([edge_e[3]]),      # outlet plane
     }
 
     # The channel side faces become the orifice walls after the channel volumes
@@ -395,13 +395,16 @@ def build_pintle_stl(
         raise ValueError("output_stl must be an absolute path")
     combined_stl.parent.mkdir(parents=True, exist_ok=True)
     deflection = 1.0e-5  # model units (metres)
+    export_axis_z = geompy.MakeVectorDXDYDZ(0.0, 0.0, 1.0)
 
     with combined_stl.open("w", encoding="ascii") as outfile:
         for patch_name, group in patch_groups.items():
             temp_stl = combined_stl.parent / f"_temp_{patch_name}.stl"
 
             try:
-                geompy.ExportSTL(group, str(temp_stl), True, deflection, True)
+                # Map the model's longitudinal +X axis onto global +Y for export.
+                rotated_group = geompy.MakeRotation(group, export_axis_z, math.pi / 4)
+                geompy.ExportSTL(rotated_group, str(temp_stl), True, deflection, True)
 
                 with temp_stl.open("r", encoding="ascii") as infile:
                     for line in infile:

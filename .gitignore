@@ -26,6 +26,8 @@ log.*
 *.foam
 .vscode/
 .DS_Store
+*.out
+*.err
 
 # images and videos
 *.bmp

@@ -1,0 +1,57 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  5.x                                   |
+|   \\  /    A nd           | Web:      www.OpenFOAM.org                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "constant";
+    object      cloudProperties;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// Name of liquid phase
+phaseName       fluid;
+
+// Droplet collision
+collision       on;
+
+// Droplet secondary breakup
+breakupModel    ReitzDiwakar;
+
+// FaceZones for postprocessing
+faceZones       ();
+
+phaseCoupling
+{
+    active          on;
+
+    // Start time
+    startTime       1e-4;
+
+    // Interval for converting droplets
+    nInterval       20;
+
+    // Limit of alpha for droplet detection
+    alphaLimit      0.002;  // orig: 0.002
+
+    // Maximum diameter of injected droplets
+    dMax            2e-3; // orig: 0.002
+
+    // Maximum sphericity of injected droplets
+    sphericity      2;
+}
+
+patchInteractionModel standardWallInteraction;
+
+standardWallInteractionCoeffs
+{
+    type            escape;
+}
+
+// ************************************************************************* //

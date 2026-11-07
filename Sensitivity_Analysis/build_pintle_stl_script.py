@@ -17,27 +17,27 @@ smeshpy = smeshBuilder.New()
 # Pintle Post Values
     # Overall Dimensions
 L_p = 35.0e-3           # [m]  , Skip length of pintle post
-D_p = 35e-3             # [m]  , Pintle post external diameter
-w_p = 2.5e-3            # [m]  , Pintle post wall thickness
+D_p = 32e-3             # [m]  , Pintle post external diameter
+w_p = 2.4e-3            # [m]  , Pintle post wall thickness
     # Fluid Guide
-a_i = 15 * np.pi / 180  # [rad], Guide angle
+a_i = 5  * np.pi / 180  # [rad], Guide angle
 a_c = 20 * np.pi / 180  # [rad], Guide center crossing angle
-r_g = 15.0e-3           # [m]  , Guide blend radius
+r_g = 12.0e-3           # [m]  , Guide blend radius
 r_t = 1.0e-3            # [m]  , Guide top radius
     # Orifice Dimensions and Values
-N_o = 25                # [-]  , Number of orifices in each row
-a_o = 20 * np.pi / 180  # [rad], Orifice angle
+N_o = 30                # [-]  , Number of orifices in each row
+a_o = 5  * np.pi / 180  # [rad], Orifice angle
 w_t = 1.2e-3            # [m]  , Orifice slit width top row
-l_t = 5.0e-3            # [m]  , Orifice slit length top row
-w_b = 1.0e-3            # [m]  , Orifice slit width bottom row
-l_b = 2.0e-3            # [m]  , Orifice slit length bottom row
+l_t = 1.68898e-3        # [m]  , Orifice slit length top row
+w_b = 0.8e-3            # [m]  , Orifice slit width bottom row
+l_b = 0.926096e-3       # [m]  , Orifice slit length bottom row
 d_r = 4.0e-3            # [m]  , Orifice row spacing
 
 # Pintle Annulus Values
-t_a = 0.90e-3           # [m]  , Fuel annulus thickness
+t_a = 0.891744e-3       # [m]  , Fuel annulus thickness
 
 # Domain Dimensions
-L_d = 70.00e-3         # [m]  , Domain length
+L_d = 70.00e-3          # [m]  , Domain length
 D_d = 110.85e-3         # [m]  , Domain diameter
 L_x = 10e-3             # [m]  , extension of ox and f channels in -x
 
@@ -357,16 +357,16 @@ wall_i_edges = [
 ]
 
 wall_ch_edges = [
-    edge_e[1],  # injector face at x = 0
     edge_e[2]   # cylindrical chamber wall
 ]
 
 patch_faces = {
     "wall_i": get_revolved_faces(wall_i_edges),
+    "wall_inj_pl": get_revolved_faces([edge_e[1]]), # injector face at x = 0
     "wall_ch": get_revolved_faces(wall_ch_edges),
-    "inlet_o": get_revolved_faces([edge_i[5]]), # oxygen inlet plane
-    "inlet_f": get_revolved_faces([edge_e[7]]), # fuel inlet plane
-    "outlet": get_revolved_faces([edge_e[3]]),  # outlet plane
+    "inlet_o": get_revolved_faces([edge_i[5]]),     # oxygen inlet plane
+    "inlet_f": get_revolved_faces([edge_e[7]]),     # fuel inlet plane
+    "outlet": get_revolved_faces([edge_e[3]]),      # outlet plane
 }
 
 # The channel side faces become the orifice walls after the channel volumes
@@ -410,7 +410,9 @@ with combined_stl.open("w", encoding="ascii") as outfile:
         temp_stl = output_dir / f"_temp_{patch_name}.stl"
 
         try:
-            geompy.ExportSTL(group, str(temp_stl), True, deflection, True)
+            # Map the model's longitudinal +X axis onto global +Y for export.
+            rotated_group = geompy.MakeRotation(group, axis_x, half_angle)
+            geompy.ExportSTL(rotated_group, str(temp_stl), True, deflection, True)
 
             with temp_stl.open("r", encoding="ascii") as infile:
                 for line in infile:

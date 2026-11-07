@@ -1,0 +1,285 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  2412                                  |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+FoamFile
+{
+    version         2;
+    format          ascii;
+    class           dictionary;
+    object          controlDict;
+}
+
+application     atomizationFoam;
+
+deltaT          1e-05;
+
+writeControl    adjustableRunTime;
+
+writeInterval   0.0001;
+
+purgeWrite      0;
+
+writeFormat     ascii;
+
+writePrecision  6;
+
+writeCompression off;
+
+timeFormat      general;
+
+timePrecision   6;
+
+runTimeModifiable yes;
+
+adjustTimeStep  yes;
+
+maxCo           1;
+
+maxAlphaCo      0.5;
+
+maxDeltaT       1;
+
+startFrom       latestTime;
+
+stopAt          endTime;
+
+endTime         0.006;
+
+startTime       0;
+
+functions
+{
+    fieldMinMax1
+    {
+        type            fieldMinMax;
+        libs            ( fieldFunctionObjects );
+        writeControl    timeStep;
+        writeInterval   1;
+        fields          ( p_rgh U alpha.fluid );
+    }
+    planeDropletAnalysis
+    {
+        enabled         false;
+        type            coded;
+        libs            ( "libutilityFunctionObjects.so" );
+        name            planeDropletAnalysis;
+        writeControl    outputTime;
+        codeExecute     #{  
+            // Analysis parameters
+            scalar plane_x    = 35e-3;
+            scalar alphaLimit = 0.002;
+            // -----------------------------------------------------------------
+            // 1. Mesh and Time setup
+            // -----------------------------------------------------------------
+            const fvMesh& mesh = refCast<const fvMesh>(obr_);
+
+            // Calculate dynamic time interval between output writes
+            static scalar lastExecutionTime = -1.0;
+            scalar currentTime = mesh.time().value();
+            
+            scalar dtInterval = (lastExecutionTime < 0.0) 
+                ? mesh.time().deltaTValue() 
+                : (currentTime - lastExecutionTime);
+            
+            lastExecutionTime = currentTime;
+
+            // -----------------------------------------------------------------
+            // 2. Fetch fields
+            // -----------------------------------------------------------------
+            const volScalarField& alpha = mesh.lookupObject<volScalarField>("alpha.lox");
+            const volVectorField& U     = mesh.lookupObject<volVectorField>("U");
+
+            // -----------------------------------------------------------------
+            // 3. Construct local vofID field
+            // -----------------------------------------------------------------
+            volScalarField vofID
+            (
+                IOobject
+                (
+                    "vofID_local",
+                    mesh.time().timeName(),
+                    mesh,
+                    IOobject::NO_READ,
+                    IOobject::NO_WRITE
+                ),
+                mesh,
+                dimensionedScalar("zero", dimless, 0.0)
+            );
+
+            // Connected Component Labeling (CCL) helper
+            auto checkConnection = [&](const label startCell, const scalar currentID)
+            {
+                vofID[startCell] = currentID;
+                DynamicList<label> cells(0);
+                cells.append(mesh.cellCells()[startCell]); // get neighbors of start cell (cellCells)
+
+                while (cells.size() > 0)
+                {
+                    DynamicList<label> neighbours(0);
+                    forAll(cells, i)
+                    {
+                        label cellI = cells[i];
+                        // if liquid and different from the current cell cluster
+                        if (alpha[cellI] > alphaLimit && mag(vofID[cellI] - currentID) > 0.1)
+                        {
+                            vofID[cellI] = currentID;
+                            neighbours.append(mesh.cellCells()[cellI]);
+                        }
+                    }
+                    cells.clear();
+                    cells.transfer(neighbours);
+                }
+            };
+
+            // -----------------------------------------------------------------
+            // 4. Connected Component Labeling & Parallel Correction
+            // -----------------------------------------------------------------
+            globalIndex globalNumbering(mesh.nCells());
+
+            forAll(mesh.cells(), cellI)
+            {
+                label globalCellID = globalNumbering.toGlobal(cellI);
+
+                // If cell has fluid and hasn't been tagged yet - i.e. vofID[cellI] = 0, and then unique cell label i different from 0
+                if (alpha[cellI] > alphaLimit && mag(vofID[cellI]) < 0.1)
+                {
+                    checkConnection(cellI, scalar(globalCellID + 1));
+                }
+            }
+            vofID.correctBoundaryConditions();
+
+            // Correct across processor boundaries
+            label corr = Foam::log(scalar(Pstream::nProcs())) / Foam::log(2.0) + 1;
+            for (int i = 0; i <= corr; i++)
+            {
+                forAll(mesh.boundary(), patchI)
+                {
+                    const fvPatch& pPatch = mesh.boundary()[patchI];
+
+                    if (pPatch.coupled())
+                    {
+                        forAll(pPatch, faceI)
+                        {
+                            const scalar ID_own = vofID.boundaryField()[patchI].patchInternalField()()[faceI];
+                            const scalar ID_nei = vofID.boundaryField()[patchI].patchNeighbourField()()[faceI];
+
+                            if ((ID_nei > 0.1) && (ID_own > 0.1) && (mag(ID_nei - ID_own) > 0.1))
+                            {
+                                scalar minID = Foam::min(ID_own, ID_nei);
+                                scalar maxID = Foam::max(ID_own, ID_nei);
+                                scalar diff  = maxID - minID;
+
+                                volScalarField filtered = diff
+                                    * pos(vofID - maxID + 0.1)
+                                    * pos(-vofID + maxID + 0.1);
+
+                                vofID -= filtered;
+                            }
+                        }
+                    }
+                }
+                vofID.correctBoundaryConditions();
+            }
+
+            // Renumber unique continuous IDs from largest ID to smallest
+            {
+                volScalarField tmp(vofID);
+                vofID = 0.0;
+                scalar maxID = gMax(tmp);
+                int iter = 1;
+                while (maxID > 0.1)
+                {
+                    volScalarField curVolID = pos(tmp - maxID + 0.1); // mask for only cells from droplet maxID
+                    vofID += iter * curVolID;
+                    tmp -= maxID * curVolID; // remove maxID cells from tmp vofID
+                    maxID = gMax(tmp);
+                    iter++;
+                }
+            }
+
+            // -----------------------------------------------------------------
+            // 5. Structure properties (matches phaseCoupling implementation)
+            // -----------------------------------------------------------------
+            label maxID = floor(gMax(vofID) + 0.5);
+
+            scalarList volume(maxID + 1, scalar(0));
+            scalarList surface(maxID + 1, scalar(0));
+            vectorList position(maxID + 1, vector(0, 0, 0));
+            vectorList velocity(maxID + 1, vector(0, 0, 0));
+
+            tmp<volScalarField> tmagGradAlpha = Foam::mag(fvc::grad(alpha));
+            const scalarField& magGradAlphaI = tmagGradAlpha().primitiveField();
+
+            // Accumulate volume-weighted physical properties
+            forAll(mesh.cells(), cellI)
+            {
+                if (vofID[cellI] > 0.1)  // Cell is part of a droplet
+                {
+                    label volID = floor(vofID[cellI] + 0.5);
+
+                    scalar dV = alpha[cellI] * mesh.V()[cellI];
+
+                    volume[volID]   += dV;
+                    surface[volID]  += magGradAlphaI[cellI] * mesh.V()[cellI];
+                    velocity[volID] += dV * U[cellI];
+                    position[volID] += dV * mesh.C()[cellI];
+                }
+            }
+
+            // Parallel reductions
+            reduce(volume,   sumOp<scalarList>());
+            reduce(surface,  sumOp<scalarList>());
+            reduce(position, sumOp<vectorList>());
+            reduce(velocity, sumOp<vectorList>());
+
+            // -----------------------------------------------------------------
+            // 6. Evaluate plane crossing and log data
+            // -----------------------------------------------------------------
+            if (Pstream::master())
+            {
+                fileName outputDir = mesh.time().globalPath() / "postProcessing";
+                mkDir(outputDir);
+
+                OFstream outFile(outputDir / "plane_droplets.csv", IOstreamOption(), IOstreamOption::APPEND);
+
+                if (mesh.time().timeIndex() == 1)
+                {
+                    outFile << "t,DropletID,x,y,z,V,A" << endl;
+                }
+
+                for (label i = 1; i <= maxID; i++)
+                {
+                    if (volume[i] > VSMALL)
+                    {
+                        // Calculate center of mass and average velocity
+                        vector pos = position[i] / volume[i];
+                        vector vel = velocity[i] / volume[i];
+
+                        // Back-project center of mass position across write interval
+                        scalar x_prev = pos.x() - vel.x() * dtInterval;
+
+                        // Check crossing condition: x_prev < plane_x <= pos.x()
+                        if (x_prev < plane_x && pos.x() >= plane_x)
+                        {
+                            outFile << currentTime << ","
+                                    << i << ","
+                                    << pos.x() << ","
+                                    << pos.y() << ","
+                                    << pos.z() << ","
+                                    << volume[i] << ","
+                                    << surface[i] << endl;
+                        }
+                    }
+                }
+            }
+        #};
+    }
+}
+
+
+// ************************************************************************* //
