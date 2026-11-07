@@ -16,13 +16,12 @@ smeshpy = smeshBuilder.New()
 
 # Pintle Post Values
     # Overall Dimensions
-L_p = 35.0e-3           # [m]  , Skip length of pintle post
-D_p = 32e-3             # [m]  , Pintle post external diameter
+L_p = 30.0e-3           # [m]  , Skip length of pintle post
+D_p = 32.0e-3           # [m]  , Pintle post external diameter
 w_p = 2.4e-3            # [m]  , Pintle post wall thickness
     # Fluid Guide
-a_i = 5  * np.pi / 180  # [rad], Guide angle
-a_c = 20 * np.pi / 180  # [rad], Guide center crossing angle
-r_g = 12.0e-3           # [m]  , Guide blend radius
+a_i = 0 * np.pi / 180  # [rad], Guide angle
+r_g = 200.0e-3           # [m]  , Guide blend radius
 r_t = 1.0e-3            # [m]  , Guide top radius
     # Orifice Dimensions and Values
 N_o = 30                # [-]  , Number of orifices in each row
@@ -50,88 +49,81 @@ r_o = D_p / 2.0       # external radius
 # start top left going clock wise around the interior of the pintle
 pt1 = (-L_x, r_i, 0)
 
-dx2 = w_p * (1/np.cos(a_i) + np.tan(a_i))
-pt2 = (L_p - dx2, r_i, 0)
+pt2 = (L_p, r_i, 0)
 
-h = r_g * np.cos(a_c)
-dy3 = r_i - h + r_g * np.sin(a_i)
-dx3 = dy3 * np.tan(a_i)
-pt3 = (pt2[0] - dx3, pt2[1] - dy3, 0)
+a1c = (pt2[0] - r_g * np.cos(a_i), pt2[1] + r_g * np.sin(a_i), 0)
 
-dxa1 = r_g * np.cos(a_i)
-a1c = (pt3[0] - dxa1, h, 0)
-
-y4 = h * r_t / (r_g + r_t)
-xi = np.sqrt((r_g + r_t)**2 - h**2)
-dx4 = xi * r_t / (r_g + r_t)
-pt4 = (a1c[0] + xi - dx4, y4, 0)
+y3 = a1c[1] * r_t / (r_g + r_t)
+xi = np.sqrt((r_g + r_t)**2 - a1c[1]**2)
+dx3 = xi * r_t / (r_g + r_t)
+pt3 = (a1c[0] + xi - dx3, y3, 0)
 
 a2c = (a1c[0] + xi, 0, 0)
 
-pt5 = (a2c[0] - r_t, 0, 0)
+pt4 = (a2c[0] - r_t, 0, 0)
 
-pt6 = (-L_x, 0, 0)
+pt5 = (-L_x, 0, 0)
 
 # External Geometery_________________________________________________________________________
 # start at outer edge of annular inlet going clock wise around the exterior pintle and domain
-pt7 = (-L_x, r_o + t_a, 0)
+pt6 = (-L_x, r_o + t_a, 0)
 
-pt8 = (0, r_o + t_a, 0)
+pt7 = (0, r_o + t_a, 0)
 
-pt9 = (0, D_d/2, 0)
+pt8 = (0, D_d/2, 0)
 
-pt10 = (L_d, D_d/2, 0)
+pt9 = (L_d, D_d/2, 0)
 
-pt11 = (L_d, 0, 0)
+pt10 = (L_d, 0, 0)
 
-pt12 = (L_p, 0, 0)
+dx11 = np.sqrt((r_g + w_p)**2 - (r_o - a1c[1])**2)
+pt11 = (a1c[0] + dx11, 0, 0)
 
-pt13 = (L_p, r_o, 0)
+pt12 = (pt11[0], r_o, 0)
 
-pt14 = (-L_x, r_o, 0)
+pt13 = (-L_x, r_o, 0)
 
 # Bottom Row Orifice Geometery_______________________________________________________
 # Located on above x-axis, starting at midpoint of bottom arc on the exterior surface
-dy15 = r_o - pt2[1]
-pt15 = (pt2[0] + dy15 * np.tan(a_o), r_o, 0)
+dy14 = r_o - pt2[1]
+pt14 = (pt2[0] + dy14 * np.tan(a_o), r_o, 0)
 
-pt16 = (pt15[0] - np.cos(a_o) * w_b / 2, pt15[1] + np.sin(a_o) * w_b / 2, w_b / 2)
+pt15 = (pt14[0] - np.cos(a_o) * w_b / 2, pt14[1] + np.sin(a_o) * w_b / 2, w_b / 2)
 
-pt17 = (pt15[0] - np.cos(a_o)*(l_b - w_b/2), pt15[1] + np.sin(a_o)*(l_b -w_b/2), w_b/2)
+pt16 = (pt14[0] - np.cos(a_o)*(l_b - w_b/2), pt14[1] + np.sin(a_o)*(l_b -w_b/2), w_b/2)
 
-pt18 = (pt15[0] - np.cos(a_o)*l_b, pt15[1] + np.sin(a_o)*l_b, 0)
+pt17 = (pt14[0] - np.cos(a_o)*l_b, pt14[1] + np.sin(a_o)*l_b, 0)
 
-pt19 = (pt17[0], pt17[1], -w_b/2)
+pt18 = (pt16[0], pt16[1], -w_b/2)
 
-pt20 = (pt16[0], pt16[1], -w_b/2)
+pt19 = (pt15[0], pt15[1], -w_b/2)
 
 # Top Row Orifice Geometery_____________________________________________________________________________
 # Located on above x-axis (for construction), starting at midpoint of bottom arc on the exterior surface
-pt21 = (pt15[0] - d_r, pt15[1], 0)
+pt20 = (pt14[0] - d_r, pt14[1], 0)
 
-pt22 = (pt21[0] - np.cos(a_o) * w_t / 2, pt21[1] + np.sin(a_o) * w_t / 2, w_t / 2)
+pt21 = (pt20[0] - np.cos(a_o) * w_t / 2, pt20[1] + np.sin(a_o) * w_t / 2, w_t / 2)
 
-pt23 = (pt21[0] - np.cos(a_o) * (l_t - w_t / 2), pt21[1] + np.sin(a_o) * (l_t - w_t / 2), w_t / 2)
+pt22 = (pt20[0] - np.cos(a_o) * (l_t - w_t / 2), pt20[1] + np.sin(a_o) * (l_t - w_t / 2), w_t / 2)
 
-pt24 = (pt21[0] - np.cos(a_o) * l_t, pt21[1] + np.sin(a_o) * l_t, 0)
+pt23 = (pt20[0] - np.cos(a_o) * l_t, pt20[1] + np.sin(a_o) * l_t, 0)
 
-pt25 = (pt23[0], pt23[1], -w_t / 2)
+pt24 = (pt22[0], pt22[1], -w_t / 2)
 
-pt26 = (pt22[0], pt22[1], -w_t / 2)
+pt25 = (pt21[0], pt21[1], -w_t / 2)
 
 #%% Build geometry
 
 # Interal Geometry____________________________________________________________________________________
-pts_i = {"pt1": pt1, "pt2": pt2,"pt3": pt3, "a1c": a1c, "pt4": pt4, "a2c": a2c, "pt5": pt5,"pt6": pt6}
+pts_i = {"pt1": pt1, "pt2": pt2, "pt3": pt3, "a1c": a1c, "pt4": pt4, "a2c": a2c, "pt5": pt5}
 vrt_i = {name: geompy.MakeVertex(*point) for name, point in pts_i.items()}
 # Each segment is (start, end, arc center); a missing center means a straight line.
 seg_i = [
     ("pt1", "pt2", None),
-    ("pt2", "pt3", None),
-    ("pt3", "pt4", "a1c"),
-    ("pt4", "pt5", "a2c"),
-    ("pt5", "pt6", None),
-    ("pt6", "pt1", None),
+    ("pt2", "pt3", "a1c"),
+    ("pt3", "pt4", "a2c"),
+    ("pt4", "pt5", None),
+    ("pt5", "pt1", None),
 ]
 edge_i = []
 for start, end, center in seg_i:
@@ -146,18 +138,18 @@ wire_i = geompy.MakeWire(edge_i)
 face_i = geompy.MakeFaceWires([wire_i], True)
 
 # External Geometry____________________________________________________________________________________________
-pts_e = {"pt7": pt7, "pt8": pt8,"pt9": pt9, "pt10": pt10, "pt11": pt11, "pt12": pt12, "pt13": pt13, "pt14": pt14}
+pts_e = {"pt6": pt6, "pt7": pt7, "pt8": pt8, "pt9": pt9, "pt10": pt10, "pt11": pt11, "pt12": pt12, "pt13": pt13}
 vrt_e = {name: geompy.MakeVertex(*point) for name, point in pts_e.items()}
 # Each segment is (start, end, arc center); a missing center means a straight line.
 seg_e = [
+    ("pt6", "pt7", None),
     ("pt7", "pt8", None),
     ("pt8", "pt9", None),
     ("pt9", "pt10", None),
     ("pt10", "pt11", None),
     ("pt11", "pt12", None),
     ("pt12", "pt13", None),
-    ("pt13", "pt14", None),
-    ("pt14", "pt7", None),
+    ("pt13", "pt6", None),
 ]
 edge_e = []
 for start, end, center in seg_e:
@@ -172,14 +164,14 @@ wire_e = geompy.MakeWire(edge_e)
 face_e = geompy.MakeFaceWires([wire_e], True)
 
 # Bottom Orifice____________________________________________________________________________________________
-pts_b = {"pt15": pt15, "pt16": pt16, "pt17": pt17, "pt18": pt18, "pt19": pt19, "pt20": pt20}
+pts_b = {"pt14": pt14, "pt15": pt15, "pt16": pt16, "pt17": pt17, "pt18": pt18, "pt19": pt19}
 vrt_b = {name: geompy.MakeVertex(*point) for name, point in pts_b.items()}
 # Each segment is (start, end, arc midpoint); a missing center means a straight line.
 seg_b = [
-    ("pt16", "pt17", None),
-    ("pt17", "pt19", "pt18"),
-    ("pt19", "pt20", None),
-    ("pt20", "pt16", "pt15"),
+    ("pt15", "pt16", None),
+    ("pt16", "pt18", "pt17"),
+    ("pt18", "pt19", None),
+    ("pt19", "pt15", "pt14"),
 ]
 edge_b = []
 for start, end, center in seg_b:
@@ -194,14 +186,14 @@ wire_b = geompy.MakeWire(edge_b)
 face_b = geompy.MakeFaceWires([wire_b], True)
 
 # Top Orifice____________________________________________________________________________________________
-pts_t = {"pt21": pt21, "pt22": pt22, "pt23": pt23, "pt24": pt24, "pt25": pt25, "pt26": pt26}
+pts_t = {"pt20": pt20, "pt21": pt21, "pt22": pt22, "pt23": pt23, "pt24": pt24, "pt25": pt25}
 vrt_t = {name: geompy.MakeVertex(*point) for name, point in pts_t.items()}
 # Each segment is (start, end, arc midpoint); a missing center means a straight line.
 seg_t = [
-    ("pt22", "pt23", None),
-    ("pt23", "pt25", "pt24"),
-    ("pt25", "pt26", None),
-    ("pt26", "pt22", "pt21"),
+    ("pt21", "pt22", None),
+    ("pt22", "pt24", "pt23"),
+    ("pt24", "pt25", None),
+    ("pt25", "pt21", "pt20"),
 ]
 edge_t = []
 for start, end, center in seg_t:
@@ -350,7 +342,7 @@ def make_face_group(name, faces):
 
 # Revolve the profile edges and map those surfaces onto the final Boolean result.
 wall_i_edges = [
-    *edge_i[:4],
+    *edge_i[:3],
     edge_e[0],  # outer boundary of the fuel annulus
     edge_e[5],  # injector end face
     edge_e[6],  # outside of the pintle
@@ -364,7 +356,7 @@ patch_faces = {
     "wall_i": get_revolved_faces(wall_i_edges),
     "wall_inj_pl": get_revolved_faces([edge_e[1]]), # injector face at x = 0
     "wall_ch": get_revolved_faces(wall_ch_edges),
-    "inlet_o": get_revolved_faces([edge_i[5]]),     # oxygen inlet plane
+    "inlet_o": get_revolved_faces([edge_i[4]]),     # oxygen inlet plane
     "inlet_f": get_revolved_faces([edge_e[7]]),     # fuel inlet plane
     "outlet": get_revolved_faces([edge_e[3]]),      # outlet plane
 }
