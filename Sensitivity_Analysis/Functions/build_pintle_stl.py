@@ -28,12 +28,16 @@ def build_pintle_stl(
     D_d,
     L_x,
     output_stl,
+    verbose = False
 ):
     """Build the fluid-domain geometry and export named ASCII STL patches.
 
     All dimensions use meters and all angles use radians. ``output_stl`` must
     be the complete destination path, including the STL filename.
     """
+    if a_i > a_o: 
+        raise RuntimeError("Orifice angle a_o has to be larger than guide angle")
+
     #%% Define geometry points
 
     r_i = D_p / 2.0 - w_p # internal radius
@@ -114,9 +118,9 @@ def build_pintle_stl(
     # Each segment is (start, end, arc center); a missing center means a straight line.
     seg_i = [
         ("pt1", "pt2", None),
-        ("pt2", "pt3", None),
-        ("pt3", "pt4", "a1c"),
-        ("pt4", "pt5", "a2c"),
+        ("pt2", "pt3", "a1c"),
+        ("pt3", "pt4", "a2c"),
+        ("pt4", "pt5", None),
         ("pt5", "pt1", None),
     ]
     edge_i = []
@@ -130,6 +134,10 @@ def build_pintle_stl(
         edge_i.append(edge)
     wire_i = geompy.MakeWire(edge_i)
     face_i = geompy.MakeFaceWires([wire_i], True)
+
+    if verbose:
+        for name, point in pts_i.items():
+            print(f"{name}: {point}")
 
     # External Geometry____________________________________________________________________________________________
     pts_e = {"pt6": pt6, "pt7": pt7, "pt8": pt8, "pt9": pt9, "pt10": pt10, "pt11": pt11, "pt12": pt12, "pt13": pt13}
@@ -157,6 +165,10 @@ def build_pintle_stl(
     wire_e = geompy.MakeWire(edge_e)
     face_e = geompy.MakeFaceWires([wire_e], True)
 
+    if verbose:
+        for name, point in pts_e.items():
+            print(f"{name}: {point}")
+
     # Bottom Orifice____________________________________________________________________________________________
     pts_b = {"pt14": pt14, "pt15": pt15, "pt16": pt16, "pt17": pt17, "pt18": pt18, "pt19": pt19}
     vrt_b = {name: geompy.MakeVertex(*point) for name, point in pts_b.items()}
@@ -178,6 +190,10 @@ def build_pintle_stl(
         edge_b.append(edge)
     wire_b = geompy.MakeWire(edge_b)
     face_b = geompy.MakeFaceWires([wire_b], True)
+
+    if verbose:
+        for name, point in pts_b.items():
+            print(f"{name}: {point}")
 
     # Top Orifice____________________________________________________________________________________________
     pts_t = {"pt20": pt20, "pt21": pt21, "pt22": pt22, "pt23": pt23, "pt24": pt24, "pt25": pt25}
@@ -201,15 +217,26 @@ def build_pintle_stl(
     wire_t = geompy.MakeWire(edge_t)
     face_t = geompy.MakeFaceWires([wire_t], True)
 
+    if verbose:
+        for name, point in pts_t.items():
+            print(f"{name}: {point}")
+
     #%% Revolve Bulk volumes x-degrees around X-axis
 
     phi_seg = 2*np.pi / N_o
     N_seg = np.floor(np.pi/2 / phi_seg)
     rev_angle = N_seg * phi_seg
 
-    axis_x = geompy.MakeVectorDXDYDZ(1.0, 0.0, 0.0)
-
     half_angle = rev_angle / 2
+
+    if verbose:
+        print("Angular values:")
+        print(f"phi_seg:    {phi_seg}")
+        print(f"N_seg:      {N_seg}")
+        print(f"rev_angle:  {rev_angle}")
+        print(f"half_angle: {half_angle}")
+
+    axis_x = geompy.MakeVectorDXDYDZ(1.0, 0.0, 0.0)
 
     face_e_centered = geompy.MakeRotation(face_e, axis_x, -half_angle)
     face_i_centered = geompy.MakeRotation(face_i, axis_x, -half_angle)
@@ -237,6 +264,13 @@ def build_pintle_stl(
     ch_an_b = [k * phi_seg for k in range(-N_half_b, N_half_b + 1)]
     chs_b = geompy.MakeCompound([geompy.MakeRotation(ch_b, axis_x, angle) for angle in ch_an_b])
 
+    if verbose:
+        print("Bottom orifice channel:")
+        print(f"ch_len_b: {ch_len_b}")
+        print(f"int_N_seg: {int_N_seg}")
+        print(f"N_half_b: {N_half_b}")
+        print(f"ch_an_b: {np.degrees(ch_an_b)} (°)")
+
     # Top Orifice______________________________________________________________________________________
     # Extrude top orifice at center location
     ch_len_t = w_p / np.cos(a_o) + l_t * np.tan(a_o)
@@ -250,6 +284,12 @@ def build_pintle_stl(
     N_half_t = int_N_seg // 2 if int_N_seg % 2 == 0 else (int_N_seg + 1) // 2
     ch_an_t = [k * phi_seg for k in range(-N_half_t, N_half_t)]
     chs_t = geompy.MakeCompound([geompy.MakeRotation(ch_t_off, axis_x, angle) for angle in ch_an_t])
+
+    if verbose:
+        print("Top orifice channel:")
+        print(f"ch_len_t: {ch_len_t}")
+        print(f"N_half_t: {N_half_t}")
+        print(f"ch_an_t: {np.degrees(ch_an_t)} (°)")
 
     # Clip edge orifices to be within domain___________________________________________________________
     clip_points = [(-L_x, 0, 0),(L_d, 0, 0),(L_d, D_d/2, 0),(-L_x, D_d/2, 0)]
@@ -275,12 +315,10 @@ def build_pintle_stl(
 
     FACE = geompy.ShapeType["FACE"]
 
-
     def get_final_faces(source_shape):
         """Find final-domain faces that correspond to a source shape."""
         in_place = geompy.GetInPlace(fluid_domain, source_shape)
         return geompy.SubShapeAll(in_place, FACE)
-
 
     def get_revolved_faces(edges):
         """Map revolutions of profile edges onto the final fluid-domain faces."""
@@ -314,7 +352,6 @@ def build_pintle_stl(
 
         return True
 
-
     def make_face_group(name, faces):
         """Create a GEOM face group, deduplicating final-domain subshapes."""
         group = geompy.CreateGroup(fluid_domain, FACE)
@@ -330,7 +367,7 @@ def build_pintle_stl(
             raise RuntimeError(f"Boundary group {name!r} is empty")
 
         geompy.addToStudyInFather(fluid_domain, group, name)
-        print(f"{name}: {len(added_ids)} face(s)")
+        if verbose: print(f"{name}: {len(added_ids)} face(s)")
         return group
 
 
@@ -348,7 +385,7 @@ def build_pintle_stl(
 
     patch_faces = {
         "wall_i": get_revolved_faces(wall_i_edges),
-        "wall_inj_pl": edge_e[1],                       # injector face at x = 0
+        "wall_inj_pl": get_revolved_faces([edge_e[1]]), # injector face at x = 0
         "wall_ch": get_revolved_faces(wall_ch_edges),
         "inlet_o": get_revolved_faces([edge_i[4]]),     # oxygen inlet plane
         "inlet_f": get_revolved_faces([edge_e[7]]),     # fuel inlet plane
@@ -382,35 +419,36 @@ def build_pintle_stl(
     }
 
     # Export one ASCII STL solid per group, then combine the solids into one file.
-    combined_stl = Path(output_stl).expanduser()
-    if not combined_stl.is_absolute():
-        raise ValueError("output_stl must be an absolute path")
-    combined_stl.parent.mkdir(parents=True, exist_ok=True)
-    deflection = 1.0e-5  # model units (metres)
-    export_axis_z = geompy.MakeVectorDXDYDZ(0.0, 0.0, 1.0)
+    if output_stl is not None:
+        combined_stl_path = Path(output_stl).expanduser()
+        if not combined_stl_path.is_absolute():
+            raise ValueError("output_stl must be an absolute path")
+        combined_stl_path.parent.mkdir(parents=True, exist_ok=True)
+        deflection = 1.0e-5  # model units (metres)
+        with combined_stl_path.open("w", encoding="ascii") as outfile:
+            for patch_name, group in patch_groups.items():
+                temp_stl = combined_stl_path.parent / f"_temp_{patch_name}.stl"
 
-    with combined_stl.open("w", encoding="ascii") as outfile:
-        for patch_name, group in patch_groups.items():
-            temp_stl = combined_stl.parent / f"_temp_{patch_name}.stl"
+                try:
+                    # Map the model's longitudinal +X axis onto global +Y for export.
+                    rotated_group = geompy.MakeRotation(group, axis_x, half_angle)
+                    geompy.ExportSTL(rotated_group, str(temp_stl), True, deflection, True)
 
-            try:
-                # Map the model's longitudinal +X axis onto global +Y for export.
-                rotated_group = geompy.MakeRotation(group, export_axis_z, math.pi / 4)
-                geompy.ExportSTL(rotated_group, str(temp_stl), True, deflection, True)
+                    with temp_stl.open("r", encoding="ascii") as infile:
+                        for line in infile:
+                            stripped = line.strip()
+                            if stripped.startswith("solid"):
+                                outfile.write(f"solid {patch_name}\n")
+                            elif stripped.startswith("endsolid"):
+                                outfile.write(f"endsolid {patch_name}\n")
+                            else:
+                                outfile.write(line)
+                finally:
+                    if temp_stl.exists():
+                        temp_stl.unlink()
 
-                with temp_stl.open("r", encoding="ascii") as infile:
-                    for line in infile:
-                        stripped = line.strip()
-                        if stripped.startswith("solid"):
-                            outfile.write(f"solid {patch_name}\n")
-                        elif stripped.startswith("endsolid"):
-                            outfile.write(f"endsolid {patch_name}\n")
-                        else:
-                            outfile.write(line)
-            finally:
-                if temp_stl.exists():
-                    temp_stl.unlink()
-
-    print(f"Named STL exported to: {combined_stl}")
-    # %%
-    return combined_stl
+        if verbose: print(f"Named STL exported to: {combined_stl_path}")
+        # %%
+        return combined_stl_path
+    else:
+        return None

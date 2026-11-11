@@ -6,7 +6,6 @@ from pathlib import Path
 import salome
 from salome.geom import geomBuilder # type: ignore
 from salome.smesh import smeshBuilder # type: ignore
-import SMESH
 
 salome.salome_init()
 geompy = geomBuilder.New()
@@ -20,8 +19,8 @@ L_p = 30.0e-3           # [m]  , Skip length of pintle post
 D_p = 32.0e-3           # [m]  , Pintle post external diameter
 w_p = 2.4e-3            # [m]  , Pintle post wall thickness
     # Fluid Guide
-a_i = 0 * np.pi / 180  # [rad], Guide angle
-r_g = 200.0e-3           # [m]  , Guide blend radius
+a_i = 20  * np.pi / 180  # [rad], Guide angle
+r_g = 20.0e-3           # [m]  , Guide blend radius
 r_t = 1.0e-3            # [m]  , Guide top radius
     # Orifice Dimensions and Values
 N_o = 30                # [-]  , Number of orifices in each row
