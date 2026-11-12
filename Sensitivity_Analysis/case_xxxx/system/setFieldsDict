@@ -1,0 +1,57 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2406                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      setFieldsDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+cyl1_p2      (25e-3 0 0);
+cyl1_radius  13.6e-3;
+
+cyl2_p2      (0 0 0);
+cyl2_radius  18.4e-3;
+
+// Set default phase fraction across the entire mesh (0 = gas/ambient)
+defaultFieldValues
+(
+    volScalarFieldValue alpha.fluid 0
+);
+
+// Overwrite alpha.fluid = 1 inside the specified cylinder
+regions
+(
+    cylinderToCell
+    {
+        p1      (-0.01 0 0);
+        p2      $cyl1_p2;
+        radius  $cyl1_radius;;
+
+        fieldValues
+        (
+            volScalarFieldValue alpha.fluid 1
+        );
+    }
+
+    cylinderToCell
+    {
+        p1      (-0.01 0 0);
+        p2      cyl2_p2;
+        radius  cyl2_radius;
+
+        fieldValues
+        (
+            volScalarFieldValue alpha.fluid 1
+        );
+    }
+);
+
+// ************************************************************************* //

@@ -1,4 +1,5 @@
 #%% Imports
+import logging
 import math
 import numpy as np
 from pathlib import Path
@@ -7,6 +8,7 @@ from salome.geom import geomBuilder # type: ignore
 
 salome.salome_init()
 geompy = geomBuilder.New()
+logger = logging.getLogger(__name__)
 
 def build_pintle_stl(
     *,
@@ -28,7 +30,6 @@ def build_pintle_stl(
     D_d,
     L_x,
     output_stl,
-    verbose = False
 ):
     """Build the fluid-domain geometry and export named ASCII STL patches.
 
@@ -135,9 +136,8 @@ def build_pintle_stl(
     wire_i = geompy.MakeWire(edge_i)
     face_i = geompy.MakeFaceWires([wire_i], True)
 
-    if verbose:
-        for name, point in pts_i.items():
-            print(f"{name}: {point}")
+    for name, point in pts_i.items():
+        logger.debug("%s: %s", name, point)
 
     # External Geometry____________________________________________________________________________________________
     pts_e = {"pt6": pt6, "pt7": pt7, "pt8": pt8, "pt9": pt9, "pt10": pt10, "pt11": pt11, "pt12": pt12, "pt13": pt13}
@@ -165,9 +165,8 @@ def build_pintle_stl(
     wire_e = geompy.MakeWire(edge_e)
     face_e = geompy.MakeFaceWires([wire_e], True)
 
-    if verbose:
-        for name, point in pts_e.items():
-            print(f"{name}: {point}")
+    for name, point in pts_e.items():
+        logger.debug("%s: %s", name, point)
 
     # Bottom Orifice____________________________________________________________________________________________
     pts_b = {"pt14": pt14, "pt15": pt15, "pt16": pt16, "pt17": pt17, "pt18": pt18, "pt19": pt19}
@@ -191,9 +190,8 @@ def build_pintle_stl(
     wire_b = geompy.MakeWire(edge_b)
     face_b = geompy.MakeFaceWires([wire_b], True)
 
-    if verbose:
-        for name, point in pts_b.items():
-            print(f"{name}: {point}")
+    for name, point in pts_b.items():
+        logger.debug("%s: %s", name, point)
 
     # Top Orifice____________________________________________________________________________________________
     pts_t = {"pt20": pt20, "pt21": pt21, "pt22": pt22, "pt23": pt23, "pt24": pt24, "pt25": pt25}
@@ -217,9 +215,8 @@ def build_pintle_stl(
     wire_t = geompy.MakeWire(edge_t)
     face_t = geompy.MakeFaceWires([wire_t], True)
 
-    if verbose:
-        for name, point in pts_t.items():
-            print(f"{name}: {point}")
+    for name, point in pts_t.items():
+        logger.debug("%s: %s", name, point)
 
     #%% Revolve Bulk volumes x-degrees around X-axis
 
@@ -229,12 +226,11 @@ def build_pintle_stl(
 
     half_angle = rev_angle / 2
 
-    if verbose:
-        print("Angular values:")
-        print(f"phi_seg:    {phi_seg}")
-        print(f"N_seg:      {N_seg}")
-        print(f"rev_angle:  {rev_angle}")
-        print(f"half_angle: {half_angle}")
+    logger.debug("Angular values:")
+    logger.debug("phi_seg: %s", phi_seg)
+    logger.debug("N_seg: %s", N_seg)
+    logger.debug("rev_angle: %s", rev_angle)
+    logger.debug("half_angle: %s", half_angle)
 
     axis_x = geompy.MakeVectorDXDYDZ(1.0, 0.0, 0.0)
 
@@ -264,12 +260,11 @@ def build_pintle_stl(
     ch_an_b = [k * phi_seg for k in range(-N_half_b, N_half_b + 1)]
     chs_b = geompy.MakeCompound([geompy.MakeRotation(ch_b, axis_x, angle) for angle in ch_an_b])
 
-    if verbose:
-        print("Bottom orifice channel:")
-        print(f"ch_len_b: {ch_len_b}")
-        print(f"int_N_seg: {int_N_seg}")
-        print(f"N_half_b: {N_half_b}")
-        print(f"ch_an_b: {np.degrees(ch_an_b)} (°)")
+    logger.debug("Bottom orifice channel:")
+    logger.debug("ch_len_b: %s", ch_len_b)
+    logger.debug("int_N_seg: %s", int_N_seg)
+    logger.debug("N_half_b: %s", N_half_b)
+    logger.debug("ch_an_b: %s (°)", np.degrees(ch_an_b))
 
     # Top Orifice______________________________________________________________________________________
     # Extrude top orifice at center location
@@ -285,11 +280,10 @@ def build_pintle_stl(
     ch_an_t = [k * phi_seg for k in range(-N_half_t, N_half_t)]
     chs_t = geompy.MakeCompound([geompy.MakeRotation(ch_t_off, axis_x, angle) for angle in ch_an_t])
 
-    if verbose:
-        print("Top orifice channel:")
-        print(f"ch_len_t: {ch_len_t}")
-        print(f"N_half_t: {N_half_t}")
-        print(f"ch_an_t: {np.degrees(ch_an_t)} (°)")
+    logger.debug("Top orifice channel:")
+    logger.debug("ch_len_t: %s", ch_len_t)
+    logger.debug("N_half_t: %s", N_half_t)
+    logger.debug("ch_an_t: %s (°)", np.degrees(ch_an_t))
 
     # Clip edge orifices to be within domain___________________________________________________________
     clip_points = [(-L_x, 0, 0),(L_d, 0, 0),(L_d, D_d/2, 0),(-L_x, D_d/2, 0)]
@@ -367,7 +361,7 @@ def build_pintle_stl(
             raise RuntimeError(f"Boundary group {name!r} is empty")
 
         geompy.addToStudyInFather(fluid_domain, group, name)
-        if verbose: print(f"{name}: {len(added_ids)} face(s)")
+        logger.debug("%s: %s face(s)", name, len(added_ids))
         return group
 
 
@@ -447,8 +441,8 @@ def build_pintle_stl(
                     if temp_stl.exists():
                         temp_stl.unlink()
 
-        if verbose: print(f"Named STL exported to: {combined_stl_path}")
+        logger.info("Named STL exported to: %s", combined_stl_path)
         # %%
-        return combined_stl_path
+        return combined_stl_path, rev_angle
     else:
-        return None
+        return None, rev_angle

@@ -66,7 +66,7 @@ b_pdr = (0.15, 0.25)          # [-]  , Pressure drop to chamber pressure ratio (
 b_thb = (50*d2rd, 70*d2rd)    # [rad], Target spray angle
 
 # LHS options______________________________________________________________________________________
-N_samp = 40             # [-]  , Target final number of samples (i.e. more samples will be generated initially to cover space and then downsampled)
+N_samp = 50             # [-]  , Target final number of samples (i.e. more samples will be generated initially to cover space and then downsampled)
 verbose = False         # [-]  , Enables prints during LHS verification sweep - note due to parallel execution it's a bit messed up
 
 #%% Preliminaries
@@ -104,8 +104,8 @@ bounds_var = np.array([B_DESIGN_VAR[key] for key in B_DESIGN_VAR.keys()])
 
 #%% Create LHS samples
 
-lhc_sampler = qmc.LatinHypercube(d=len(names_var), optimization="random-cd")
-samples_01 = lhc_sampler.random(n=N_samp * 100)
+lhs_sampler = qmc.LatinHypercube(d=len(names_var), optimization="random-cd")
+samples_01 = lhs_sampler.random(n=N_samp * 100)
 samples_sc = qmc.scale(sample=samples_01, l_bounds=bounds_var[:,0], u_bounds=bounds_var[:,1])
 
 #%% Apply checks to samples and store
@@ -130,7 +130,7 @@ def evaluate_sample(sample):
         return None
 
     try: 
-        build_pintle_stl(**d_dim, output_stl=None, verbose=False)
+        build_pintle_stl(**d_dim, output_stl=None)
     except RuntimeError as exc:
         if verbose:
             print(f"Geometry FAILED: {str(exc)}")
@@ -180,18 +180,20 @@ df_res.to_csv("case_data.csv", index=False)
 
 #%% Test: generate stl s
 
-parent_dir =  Path.cwd() / Path("stl")
-parent_dir.mkdir(exist_ok=True)
+# df_res = pd.read_csv("case_data.csv")
 
-# Dump the whole dataframe so we don't lose the case_id
-cases = df_res.to_dict(orient="records")
+# parent_dir =  Path.cwd() / Path("stl")
+# parent_dir.mkdir(exist_ok=True)
 
-for case in cases:
-    case_id = case["case_id"]
+# # Dump the whole dataframe so we don't lose the case_id
+# cases = df_res.to_dict(orient="records")
+
+# for case in cases:
+#     case_id = case["case_id"]
     
-    # Extract and clean up only the geometry parameters on the fly
-    geo_dict = {k.removeprefix("geo_"): v for k, v in case.items() if k.startswith("geo_")}
+#     # Extract and clean up only the geometry parameters on the fly
+#     geo_dict = {k.removeprefix("geo_"): v for k, v in case.items() if k.startswith("geo_")}
     
-    stl_path = parent_dir / f"{case_id}.stl"
+#     stl_path = parent_dir / f"{case_id}.stl"
     
-    build_pintle_stl(**geo_dict, output_stl=stl_path, verbose=False)
+#     build_pintle_stl(**geo_dict, output_stl=stl_path)
