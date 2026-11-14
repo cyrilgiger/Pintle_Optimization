@@ -10,45 +10,37 @@ FoamFile
     version     2.0;
     format      ascii;
     class       volScalarField;
-    object      alpha.fluid;
+    object      p_rgh;
 }
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-dimensions      [0 0 0 0 0 0 0];
+dimensions      [1 -1 -2 0 0 0 0];
 
 internalField   uniform 0;
 
 boundaryField
 {
-    fluidDomain_inlet_o
+    "fluidDomain_inlet_.*"
     {
-        type            fixedValue;
-        value           uniform 1;
-    }
-
-    fluidDomain_inlet_f
-    {
-        type            fixedValue;
-        value           uniform 1;
+        type            fixedFluxPressure;
+        value           uniform 0;
     }
 
     "fluidDomain_wall_.*"
     {
-        type            zeroGradient;
+        type            fixedFluxPressure;
+        value           uniform 0;
     }
 
     fluidDomain_outlet
     {
-        type            inletOutlet;
-        inletValue      uniform 0;
+        type            fixedValue;
         value           uniform 0;
     }
 
-    "fluidDomain_periodic_.*"
+    ".*periodic_.*"
     {
         type            symmetry;
     }
 }
-
-
 // ************************************************************************* //

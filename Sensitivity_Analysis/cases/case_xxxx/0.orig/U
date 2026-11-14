@@ -45,7 +45,7 @@ boundaryField
         value           uniform (0 0 0);
     }
 
-    "fluidDomain_periodic_.*"
+    ".*periodic_.*"
     {
         type            symmetry;
     }

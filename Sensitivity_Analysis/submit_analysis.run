@@ -1,0 +1,34 @@
+#!/bin/bash
+#SBATCH --job-name=pintle
+#SBATCH --array=0-1%8
+#SBATCH --nodes=1
+#SBATCH --ntasks=72
+#SBATCH --cpus-per-task=1
+#SBATCH --time=12:00:00
+#SBATCH --error=job_%A_%a.err
+#SBATCH --output=job_%A_%a.out
+#SBATCH --partition=academic
+
+# Load modules
+module load gcc/13.2.0 openmpi/5.0.3 openfoam/2412-openmp
+
+# Environment variables - note: compiled bug fix for particle.C included in user app bin and user lib bin
+export WM_PROJECT_USER_DIR=$HOME/OpenFOAM/$USER-v2412
+export FOAM_USER_APPBIN=$WM_PROJECT_USER_DIR/platforms/$WM_OPTIONS/bin
+export FOAM_USER_LIBBIN=$WM_PROJECT_USER_DIR/platforms/$WM_OPTIONS/lib
+export PATH=$FOAM_USER_APPBIN:$PATH
+export LD_LIBRARY_PATH=$FOAM_USER_LIBBIN:$LD_LIBRARY_PATH
+
+export LD_PRELOAD=$FOAM_USER_LIBBIN/liblagrangian.so
+
+export OMP_NUM_THREADS=1
+export FOAM_SET_OMP_NUM_THREADS=1
+export OMP_PROC_BIND=false
+export OMP_PLACES=threads
+
+export PYTHONUNBUFFERED=1
+
+# Run master script passing the array task ID
+source ../.venv/bin/activate
+python3 simulate_case.py $SLURM_ARRAY_TASK_ID
+# srun atomizationFoam -parallel -postProcess > log.postprocess

@@ -178,22 +178,22 @@ df_res = pd.DataFrame(res)
 df_res.insert(0, "case_id", [f"case_{i:04d}" for i in range(len(df_res))])
 df_res.to_csv("case_data.csv", index=False)
 
-#%% Test: generate stl s
+#%% Generate stl s
 
-# df_res = pd.read_csv("case_data.csv")
+df_res = pd.read_csv("case_data.csv")
 
-# parent_dir =  Path.cwd() / Path("stl")
-# parent_dir.mkdir(exist_ok=True)
+parent_dir =  Path.cwd() / Path("stl")
+parent_dir.mkdir(exist_ok=True)
 
-# # Dump the whole dataframe so we don't lose the case_id
-# cases = df_res.to_dict(orient="records")
+# Dump the whole dataframe so we don't lose the case_id
+cases = df_res.to_dict(orient="records")
 
-# for case in cases:
-#     case_id = case["case_id"]
+for case in cases:
+    case_id = case["case_id"]
     
-#     # Extract and clean up only the geometry parameters on the fly
-#     geo_dict = {k.removeprefix("geo_"): v for k, v in case.items() if k.startswith("geo_")}
+    # Extract and clean up only the geometry parameters on the fly
+    geo_dict = {k.removeprefix("geo_"): v for k, v in case.items() if k.startswith("geo_")}
     
-#     stl_path = parent_dir / f"{case_id}.stl"
+    stl_path = parent_dir / f"{case_id}.stl"
     
-#     build_pintle_stl(**geo_dict, output_stl=stl_path)
+    build_pintle_stl(**geo_dict, output_stl=stl_path)

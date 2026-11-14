@@ -27,7 +27,7 @@ solvers
         reconstructionScheme isoAlpha;
 
         nAlphaCorr      1;
-        nAlphaSubCycles 1;
+        nAlphaSubCycles 2;
         cAlpha          1;
     }
 
@@ -42,9 +42,9 @@ solvers
     p_rgh
     {
         solver          GAMG;
-        smoother        GaussSeidel;
+        smoother        DICGaussSeidel;
         tolerance       1e-07;
-        relTol          0.05;
+        relTol          0.005;
     }
 
     p_rghFinal
@@ -61,6 +61,7 @@ solvers
         tolerance       1e-06;
         relTol          0;
     }
+    
     "(k|omega|kFinal|omegaFinal)"
     {
         solver          smoothSolver;
@@ -75,7 +76,7 @@ PIMPLE
     momentumPredictor no;
     nOuterCorrectors  1;
     nCorrectors     2;
-    nNonOrthogonalCorrectors 0;
+    nNonOrthogonalCorrectors 1;
 }
 
 

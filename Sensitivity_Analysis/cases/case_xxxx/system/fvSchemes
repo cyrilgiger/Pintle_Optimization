@@ -10,48 +10,51 @@ FoamFile
     version     2.0;
     format      ascii;
     class       dictionary;
-    object      setFieldsDict;
+    object      fvSchemes;
 }
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-cyl1_p2      (25e-3 0 0);
-cyl1_radius  13.6e-3;
+ddtSchemes
+{
+    default         Euler;
+}
 
-cyl2_p2      (0 0 0);
-cyl2_radius  18.4e-3;
+gradSchemes
+{
+    default         Gauss linear;
+    grad(U)         cellLimited Gauss linear 0.5;
+    grad(p_rgh)     cellLimited Gauss linear 0.5;
+}
 
-// Set default phase fraction across the entire mesh (0 = gas/ambient)
-defaultFieldValues
-(
-    volScalarFieldValue alpha.fluid 0
-);
+divSchemes
+{
+    div(rhoPhi,U)   Gauss limitedLinearV 0.2;
+    div(phi,alpha)  Gauss vanLeer;
+    div(phirb,alpha) Gauss linear;
+    div(((rho*nuEff)*dev2(T(grad(U))))) Gauss linear;
+    div(phi,k)      bounded Gauss upwind;
+    div(phi,omega)  bounded Gauss upwind;
+}
 
-// Overwrite alpha.fluid = 1 inside the specified cylinder
-regions
-(
-    cylinderToCell
-    {
-        p1      (-0.01 0 0);
-        p2      $cyl1_p2;
-        radius  $cyl1_radius;;
+laplacianSchemes
+{
+    default         Gauss linear limited 0.5;
+}
 
-        fieldValues
-        (
-            volScalarFieldValue alpha.fluid 1
-        );
-    }
+interpolationSchemes
+{
+    default         linear;
+}
 
-    cylinderToCell
-    {
-        p1      (-0.01 0 0);
-        p2      cyl2_p2;
-        radius  cyl2_radius;
+snGradSchemes
+{
+    default         limited 0.5;
+}
 
-        fieldValues
-        (
-            volScalarFieldValue alpha.fluid 1
-        );
-    }
-);
+wallDist
+{
+    method          meshWave;
+}
+
 
 // ************************************************************************* //
