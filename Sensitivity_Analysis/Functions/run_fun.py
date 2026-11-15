@@ -79,25 +79,19 @@ def prepare_case(str_case_id: str, d_case: dict, base_dir: Path):
     r_cyl1 = d_geo["D_p"] / 2 - d_geo["w_p"] + 0.5e-3
     r_cyl2 = d_geo["D_p"] / 2 + d_geo["t_a"] + 0.5e-3
 
-    cmds = [
-        ["foamDictionary", "system/setFieldsDict", "-entry", "cyl1_p2", "-set", f"({x_p:.4g} 0 0)"],
-        ["foamDictionary", "system/setFieldsDict", "-entry", "cyl1_radius", "-set", f"{r_cyl1:.4g}"],
-        ["foamDictionary", "system/setFieldsDict", "-entry", "cyl2_radius", "-set", f"{r_cyl2:.4g}"],
-    ]
-    for cmd in cmds:
-        try:
-            subprocess.run(cmd, cwd=case_dir, check=True, capture_output=True, text=True)
-        except subprocess.CalledProcessError as e:
-            logger.error("foamDictionary failed (%s): %s", " ".join(cmd), e.stderr.strip())
-            raise
+    write_set_fields_dict(case_dir=case_dir, x_p=x_p, r_cyl1=r_cyl1, r_cyl2=r_cyl2)
 
     logger.info(
-        "Modified fluid domain initialization to: x_p: %.2g with "
-        "v_f_cfd: %.2g, v_p_cfd: %.2g",
+        "Modified fluid domain initialization to: x_p: %.4g, r_cyl1: %.4g, r_cyl2: %.4g with "
+        "v_f_cfd: %.3g, v_p_cfd: %.3g",
         x_p,
+        r_cyl1,
+        r_cyl2,
         v_f_cfd,
         v_p_cfd,
     )
+
+# Helper functions_____________________________________________________________________________________________________
 
 def write_block_mesh_dict(case_dir: Path, rev_angle: float, r_out: float, x_min: float, x_max: float, r_in: float):
     c, s = np.cos, np.sin
@@ -221,6 +215,54 @@ mergePatchPairs
 );
 """
     (case_dir / "system" / "blockMeshDict").write_text(content)
+
+
+def write_set_fields_dict(case_dir: Path, x_p: float, r_cyl1: float, r_cyl2: float):
+    content = f"""FoamFile
+{{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      setFieldsDict;
+}}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// Set default phase fraction across the entire mesh (0 = gas/ambient)
+defaultFieldValues
+(
+    volScalarFieldValue alpha.fluid 0
+);
+
+// Overwrite alpha.fluid = 1 inside the specified cylinder
+regions
+(
+    cylinderToCell
+    {{
+        p1      (-0.01 0 0);
+        p2      ({x_p:.5g} 0 0);
+        radius  {r_cyl1:.5g};
+
+        fieldValues
+        (
+            volScalarFieldValue alpha.fluid 1
+        );
+    }}
+
+    cylinderToCell
+    {{
+        p1      (-0.01 0 0);
+        p2      (0 0 0);
+        radius  {r_cyl2:.5g};
+
+        fieldValues
+        (
+            volScalarFieldValue alpha.fluid 1
+        );
+    }}
+);
+    """
+
+    (case_dir / "system" / "setFieldsDict").write_text(content)
 
 
 #################################################################################################################################

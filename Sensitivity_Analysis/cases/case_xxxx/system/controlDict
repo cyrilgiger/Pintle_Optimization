@@ -16,7 +16,7 @@ FoamFile
 
 application     atomizationFoam;
 
-deltaT          1e-05;
+deltaT          1e-07;
 
 writeControl    adjustable;
 
@@ -38,9 +38,9 @@ runTimeModifiable yes;
 
 adjustTimeStep  yes;
 
-maxCo           0.8;
+maxCo           0.5;
 
-maxAlphaCo      0.5;
+maxAlphaCo      0.2;
 
 maxDeltaT       1;
 
@@ -54,6 +54,16 @@ startTime       0;
 
 functions
 {
+    fieldMinMax1
+    {   
+        enabled         true;
+        type            fieldMinMax;
+        libs            ( fieldFunctionObjects );
+        writeControl    timeStep;
+        writeInterval   1;
+        fields          ( p_rgh U alpha.fluid );
+    }
+
     planeDropletAnalysis
     {
         enabled         false;
