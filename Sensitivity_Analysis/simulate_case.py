@@ -11,9 +11,9 @@ def simulate_case(case_id: int):
     base_dir = Path(__file__).resolve().parent / "cases"  # directory such that: base_dir/case_0000, case_0001, ...
     logger.info("Starting case %s", str_case_id)
     df_cases = pd.read_csv("case_data.csv")
-    df_case = df_cases.loc[df_cases["case_id"] == str_case_id].iloc[0].to_dict()
+    d_case = df_cases.loc[df_cases["case_id"] == str_case_id].iloc[0].to_dict()
 
-    prepare_case(str_case_id, df_case, base_dir)
+    prepare_case(str_case_id, d_case, base_dir)
     logger.info("Prepared: %s", str_case_id)
 
     run_case(str_case_id, base_dir)

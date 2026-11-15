@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 def prepare_case(str_case_id: str, d_case: dict, base_dir: Path):
 
-    # Create run directory and copy contents from base case________________________________________
+    # Create run directory and copy contents from base case____________________________________________________________
     case_dir  = base_dir / Path(str_case_id)
     base_case = base_dir / Path("case_xxxx")
     if case_dir.exists():
@@ -24,7 +24,7 @@ def prepare_case(str_case_id: str, d_case: dict, base_dir: Path):
     logger.info("Created case directory %s", case_dir)
 
 
-    # Copy STL____________________________________________________________________________________
+    # Copy STL________________________________________________________________________________________________________
     d_geo = {k.removeprefix("geo_"): v for k, v in d_case.items() if k.startswith("geo_")}
     stl_path = case_dir / "constant/triSurface" / "pintle.stl"
     # _, rev_angle = build_pintle_stl(**d_geo, output_stl=stl_path)
@@ -37,7 +37,7 @@ def prepare_case(str_case_id: str, d_case: dict, base_dir: Path):
     logger.info("Created STL at: %s", stl_path)
 
 
-    # Modify mass flow inlet values________________________________________________________________
+    # Modify mass flow inlet values____________________________________________________________________________________
     mdo_cfd = d_case["mdo"] * rev_angle / (2*np.pi)
     mdf_cfd = np.sqrt(d_case["roo"] / d_case["rof"]) * d_case["mdf"] * rev_angle / (2*np.pi)
 
@@ -59,18 +59,18 @@ def prepare_case(str_case_id: str, d_case: dict, base_dir: Path):
     )
     
 
-    # Modify fluid properties as entered___________________________________________________________
+    # Modify fluid properties as entered_______________________________________________________________________________
     subprocess.run(f"foamDictionary constant/transportProperties -entry fluid.rho -set {d_case['roo']:.5f}",
                     cwd=case_dir, shell=True, check=True, capture_output=True)
 
     logger.info("Modified fluid properties: fluid rho: %.3f", d_case['roo'])
 
 
-    # Modify block mesh dict to the correct wedge and diameter_____________________________________
+    # Modify block mesh dict to the correct wedge and diameter_________________________________________________________
     write_block_mesh_dict(case_dir=case_dir, rev_angle=rev_angle, r_out=d_geo["D_d"]/2+1e-2, x_min=-d_geo["L_x"]-1e-2, x_max=d_geo["L_d"]+1e-2, r_in=0.3*d_geo["D_d"]/2)
 
 
-    # Modify fluid domain intialization____________________________________________________________
+    # Modify fluid domain intialization________________________________________________________________________________
     v_f_cfd = (np.sqrt(d_case["roo"] / d_case["rof"]) * d_case["mdf"]) / (d_case["roo"] * np.pi * d_geo["t_a"] * (d_geo["D_p"] + d_geo["t_a"]))
     v_p_cfd = d_case["mdo"] / (d_case["roo"] * 0.25 * np.pi * (d_geo["D_p"] - 2 * d_geo["w_p"])**2)     # fluid plug velocity in pintle (not ox. injection)
 

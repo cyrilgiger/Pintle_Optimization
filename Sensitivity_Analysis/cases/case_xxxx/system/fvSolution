@@ -34,7 +34,7 @@ solvers
     "pcorr.*"
     {
         solver          PCG;
-        smoother        DIC;
+        preconditioner  DIC;
         tolerance       1e-10;
         relTol          0;
     }
@@ -42,7 +42,7 @@ solvers
     p_rgh
     {
         solver          PCG;
-        smoother        DIC;
+        preconditioner  DIC;
         tolerance       1e-07;
         relTol          0.005;
     }

@@ -247,11 +247,15 @@ functions
                 fileName outputDir = mesh.time().globalPath() / "postProcessing";
                 mkDir(outputDir);
 
-                OFstream outFile(outputDir / "plane_droplets.csv", IOstreamOption(), IOstreamOption::APPEND);
+                fileName csvFile = outputDir / "plane_droplets.csv";
+                bool writeHeader = !isFile(csvFile);
 
-                if (mesh.time().timeIndex() == 1)
+                OFstream outFile(csvFile, IOstreamOption(), IOstreamOption::APPEND);
+                outFile.precision(12);
+
+                if (writeHeader)
                 {
-                    outFile << "t,DropletID,x,y,z,V,A" << endl;
+                    outFile << "t,DropletID,x,y,z,vx,vy,vz,V,A" << endl;
                 }
 
                 for (label i = 1; i <= maxID; i++)
@@ -273,6 +277,9 @@ functions
                                     << pos.x() << ","
                                     << pos.y() << ","
                                     << pos.z() << ","
+                                    << vel.x() << ","
+                                    << vel.y() << ","
+                                    << vel.z() << ","
                                     << volume[i] << ","
                                     << surface[i] << endl;
                         }
