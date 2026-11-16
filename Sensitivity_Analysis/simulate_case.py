@@ -3,6 +3,7 @@ import logging
 from pathlib import Path
 import pandas as pd
 from Functions.run_fun import prepare_case, run_case
+from Functions.post_fun import get_spray_vals
 
 logger = logging.getLogger(__name__)
 
@@ -14,10 +15,10 @@ def simulate_case(case_id: int):
     d_case = df_cases.loc[df_cases["case_id"] == str_case_id].iloc[0].to_dict()
     
     prepare_case(str_case_id, d_case, base_dir)
-    logger.info("Prepared: %s", str_case_id)
 
-    run_case(str_case_id, base_dir)
-    logger.info("Ran: %s", str_case_id)
+    run_case(str_case_id, base_dir, end_time=4e-3, balance_int=10e-4, keep_all=True)
+
+    get_spray_vals(str_case_id, base_dir, plane_x=35e-3, d_case=d_case, N_bins=15)
 
 
 if __name__ == "__main__":

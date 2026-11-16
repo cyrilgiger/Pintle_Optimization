@@ -1,0 +1,50 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  2406                                  |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      createPatchDict;
+}
+
+pointSync false;
+
+patches
+(
+    {
+        name periodicAMI_0;
+        patchInfo
+        {
+            type            cyclicAMI;
+            matchTolerance  0.0001;
+            neighbourPatch  periodicAMI_rev;
+            transform       rotational;
+            rotationAxis    (1 0 0);
+            rotationCentre  (0 0 0);
+        }
+        constructFrom patches;
+        patches (fluidDomain_periodic_0);
+    }
+
+    {
+        name periodicAMI_rev;
+        patchInfo
+        {
+            type            cyclicAMI;
+            matchTolerance  0.0001;
+            neighbourPatch  periodicAMI_0;
+            transform       rotational;
+            rotationAxis    (1 0 0);
+            rotationCentre  (0 0 0);
+        }
+        constructFrom patches;
+        patches (fluidDomain_periodic_rev);
+    }
+);

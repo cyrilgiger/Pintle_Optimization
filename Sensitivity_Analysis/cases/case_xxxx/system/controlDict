@@ -93,7 +93,7 @@ functions
             // -----------------------------------------------------------------
             // 2. Fetch fields
             // -----------------------------------------------------------------
-            const volScalarField& alpha = mesh.lookupObject<volScalarField>("alpha.lox");
+            const volScalarField& alpha = mesh.lookupObject<volScalarField>("alpha.fluid");
             const volVectorField& U     = mesh.lookupObject<volVectorField>("U");
 
             // -----------------------------------------------------------------

@@ -3,23 +3,37 @@ import os
 import re
 import numpy as np
 import pandas as pd
+import logging
 from pathlib import Path
 import matplotlib.pyplot as plt
 
+logger = logging.getLogger(__name__)
 
 def get_spray_vals(str_case_id: str, base_dir: Path, plane_x: float, d_case: dict, N_bins: int):
 
     case_dir = base_dir / Path(str_case_id)
 
+    state_file = case_dir / "state.txt"
+    if state_file.exists():
+        state = state_file.read_text().strip()
+        if state != "run complete":
+            logger.warning(f"Unfinished run at state {state} - skipping post processing")
+            return
+    else:
+        logger.warning(f"Could not find state file - skipping post processing")
+        return
+
     # Import VOF stats on plane________________________________________________________________________________________
 
     vof_data_file = case_dir / "postProcessing/plane_droplets.csv"
     df_vof = pd.read_csv(vof_data_file)
-    df_vof['source'] = 'vof'
-
-    df_vof['r']  = np.sqrt(df_vof['y']**2 + df_vof['z']**2)
-    df_vof['th'] = np.arctan2(df_vof['z'], df_vof['y'])
-    df_vof['vr'] = np.where(df_vof['r'] > 0.0, (df_vof['y'] * df_vof['vy'] + df_vof['z'] * df_vof['vz']) / df_vof['r'], 0.0)
+    if df_vof.empty:
+        df_vof = pd.DataFrame(columns=['t', 'x', 'y', 'z', 'vx', 'vy', 'vz', 'A', 'V', 'r', 'th', 'vr', 'source'])
+    else:
+        df_vof['source'] = 'vof'
+        df_vof['r']  = np.sqrt(df_vof['y']**2 + df_vof['z']**2)
+        df_vof['th'] = np.arctan2(df_vof['z'], df_vof['y'])
+        df_vof['vr'] = np.where(df_vof['r'] > 0.0, (df_vof['y'] * df_vof['vy'] + df_vof['z'] * df_vof['vz']) / df_vof['r'], 0.0)
 
     # Import Lagrangian stats__________________________________________________________________________________________
 
@@ -30,16 +44,50 @@ def get_spray_vals(str_case_id: str, base_dir: Path, plane_x: float, d_case: dic
 
     # Run individual calculations______________________________________________________________________________________
 
-    smd_res = calculate_SMD(df_lag=df_lag, df_vof=df_vof)
+    SMD_mean, SMD_t, SMD_lag_t, SMD_vof_t = calculate_SMD(df_lag=df_lag, df_vof=df_vof)
 
     phi_seg = 2*np.pi / d_case["des_N_o"]
     N_seg = np.floor(np.pi/2 / phi_seg)
     rev_angle = N_seg * phi_seg
-    uni_res = calculate_uniformity(df_lag=df_lag, df_vof=df_vof, N_bins=N_bins, rev_angle=rev_angle)
+    std_final_v_rel, final_v_rel, bin_widths = calculate_uniformity(df_lag=df_lag, df_vof=df_vof, N_bins=N_bins, rev_angle=rev_angle)
 
-    ang_res = calculate_spray_angle(df_lag=df_lag, df_vof=df_vof)
+    angle_m, angle_t = calculate_spray_angle(df_lag=df_lag, df_vof=df_vof)
 
-    return smd_res, uni_res, ang_res
+    # Save outputs_____________________________________________________________________________________________________
+    common_cols = ['t', 'x', 'y', 'z', 'r', 'th', 'vx', 'vy', 'vz', 'vr', 'A', 'V', 'source']
+    df_all = pd.concat([df_lag[common_cols], df_vof[common_cols]], ignore_index=True)
+    df_all.to_parquet(case_dir / "postProcessing/crossed_droplets.parquet", index=False)
+
+    out_dir = case_dir / "results"
+    out_dir.mkdir(exist_ok=True)
+
+    df_ts = pd.DataFrame({
+        "case_id": str_case_id,
+        "t": SMD_t.index,
+        "SMD": SMD_t.values,
+        "SMD_lag": SMD_lag_t.reindex(SMD_t.index).values,
+        "SMD_vof": SMD_vof_t.reindex(SMD_t.index).values,
+        "angle": angle_t.reindex(SMD_t.index).values,
+    })
+    df_ts.to_parquet(out_dir / "spray_timeseries.parquet", index=False)
+
+    summary_row = {
+        "case_id": str_case_id,
+        "SMD_mean": SMD_mean,
+        "spray_angle_deg": np.degrees(angle_m),
+        "uniformity_std": std_final_v_rel,
+        "V_total": df_all["V"].sum(),
+        "V_lag_frac": df_lag["V"].sum() / df_all["V"].sum() if df_all["V"].sum() > 0 else np.nan,
+        "n_droplets": len(df_all),
+    }
+    pd.DataFrame([summary_row]).to_parquet(out_dir / "spray_summary.parquet", index=False)
+
+    np.savez(
+        out_dir / "spray_azimuthal.npz",
+        case_id=str_case_id,
+        final_v_rel=final_v_rel,
+        bin_widths=bin_widths,
+    )
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -76,17 +124,23 @@ def calculate_uniformity(df_lag: pd.DataFrame, df_vof: pd.DataFrame, N_bins: int
 
     th_bins = np.linspace(0, rev_angle, N_bins + 1)
     th_cs = (th_bins[:-1] + th_bins[1:]) / 2
+    bin_widths = np.diff(th_bins)
 
     df['th_bin'] = pd.cut(df['th'], bins=th_bins, include_lowest=True, labels=th_cs)
 
     v_per_step = (df.groupby(['t', 'th_bin'], observed=False)['V'].sum().unstack(fill_value=0))
 
     v_cum = v_per_step.cumsum(axis=0)
+    if v_cum.empty:
+        return np.nan, np.full(N_bins, np.nan), bin_widths
 
-    bin_widths = np.diff(th_bins)
-    total_v = v_cum.iloc[-1].values.sum()
-    final_v_rel = v_cum.iloc[-1].values / total_v if total_v > 0 else np.zeros(N_bins)
+    final_v = v_cum.iloc[-1].to_numpy(dtype=float)
+    total_v = final_v.sum() # all bins
 
+    if not np.isfinite(total_v) or total_v <= 0:
+        return np.nan, np.full(N_bins, np.nan), bin_widths
+
+    final_v_rel = final_v / total_v
     std_final_v_rel = np.std(final_v_rel)
 
     return std_final_v_rel, final_v_rel, bin_widths
@@ -150,7 +204,7 @@ def import_lagrangian_cloud(case_dir: Path, plane_x: float):
             origProcId_file = lag_dir / "origProcId"
             d_vals = read_openfoam_diameters(d_file)
             pos_vals = read_openfoam_positions(pos_file)
-            vel_vals = read_openfoam_velocities(vel_file)
+            vel_vals = read_openfoam_velocities(vel_file, expected_count=len(d_vals))
             origId_vals = read_openfoam_labels(origId_file, expected_count=len(d_vals))
             origProcId_vals = read_openfoam_labels(origProcId_file, expected_count=len(d_vals))
             id_vals = [f"{p}_{id}" for p, id in zip(origProcId_vals, origId_vals)]

@@ -98,6 +98,7 @@ def prepare_case(str_case_id: str, d_case: dict, base_dir: Path):
     )
 
     state_file.write_text("prepared")
+    logger.info("Prepared: %s", str_case_id)
 
 
 
@@ -279,7 +280,7 @@ regions
 #XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX#
 #################################################################################################################################
 
-def run_case(str_case_id: str, base_dir: Path, end_time: float, balance_int: float):
+def run_case(str_case_id: str, base_dir: Path, end_time: float, balance_int: float, keep_all: bool):
 
     case_dir  = base_dir / Path(str_case_id)
     os.chdir(case_dir)
@@ -302,6 +303,18 @@ def run_case(str_case_id: str, base_dir: Path, end_time: float, balance_int: flo
                 except ValueError:
                     pass
         return times
+
+    def get_time_dirs(directory):
+        time_dirs = []
+        for child in directory.iterdir():
+            if child.is_dir():
+                try:
+                    t = float(child.name)
+                    if t > 0:
+                        time_dirs.append(child)
+                except ValueError:
+                    pass
+        return time_dirs
     #_____________________________________________________________________________________
 
     state_file = case_dir / "state.txt"
@@ -317,6 +330,9 @@ def run_case(str_case_id: str, base_dir: Path, end_time: float, balance_int: flo
             shutil.rmtree(p)
         if (case_dir / "0").is_dir():
             shutil.rmtree(case_dir / "0")
+
+        ctrl_dict = case_dir / "system/controlDict"
+        subprocess.run(f'foamDictionary {str(ctrl_dict)} -entry functions/planeDropletAnalysis/enabled -set false', shell=True, check=True)
 
         print("📂 Created 0 dir copy")
         if not os.path.isdir("0"): subprocess.run("cp -r 0.orig 0", shell=True, check=True)
@@ -374,17 +390,44 @@ def run_case(str_case_id: str, base_dir: Path, end_time: float, balance_int: flo
         current_time = latest_time()
 
         if state == "ran":
-            subprocess.run(f"reconstructParMesh -case {str(case_dir)} > log.balance 2>&1", shell=True, check=True)
+            if keep_all:
+                subprocess.run(f"reconstructParMesh -case {str(case_dir)} > log.balance 2>&1", shell=True, check=True)
+            else:
+                subprocess.run(f"reconstructParMesh -latestTime -case {str(case_dir)} > log.balance 2>&1", shell=True, check=True)
+
             state = "reconstructed par mesh"
             state_file.write_text(state)
 
         if state == "reconstructed par mesh":
-            subprocess.run(f"reconstructPar -case {str(case_dir)} >> log.balance 2>&1", shell=True, check=True)
+            if keep_all:
+                subprocess.run(f"reconstructPar -case {str(case_dir)} >> log.balance 2>&1", shell=True, check=True)
+            else:
+                subprocess.run(f"reconstructPar -latestTime -case {str(case_dir)} >> log.balance 2>&1", shell=True, check=True)
+                
             state = "reconstructed par"
             state_file.write_text(state)
 
-        if (current_time < end_time - 1e-10) and (state == "reconstructed par"):
+        if (current_time < end_time - 1e-7) and (state == "reconstructed par"):
             # subprocess.run("topoSet -latestTime >> log.balance 2>&1", shell=True, check=True)
             subprocess.run(f"decomposePar -force -latestTime -case {str(case_dir)} >> log.balance 2>&1", shell=True, check=True)
+
+            # Remove the intermediate reconstructed folder in case_dir to save disk space
+            if not keep_all:
+                time_dirs = get_time_dirs(case_dir)
+                for t_dir in time_dirs:
+                    shutil.rmtree(t_dir)
+
             state = "decomposed"
             state_file.write_text(state)
+
+    # Get VOF post processing
+    subprocess.run(f'foamDictionary {str(ctrl_dict)} -entry functions/planeDropletAnalysis/enabled -set true', shell=True, check=True)
+    subprocess.run(f'srun atomizationFoam -parallel -postProcess > log.postprocess 2>&1', shell=True, check=True)
+
+    current_time = latest_time()
+    if current_time >= end_time - 1e-7:
+        logger.info("Ran: %s", str_case_id)
+        state = "run complete"
+        state_file.write_text(state)
+    else:
+        logger.warning(f"Loop terminated at time {current_time:.4g} instead of end time {end_time:.4g}")
