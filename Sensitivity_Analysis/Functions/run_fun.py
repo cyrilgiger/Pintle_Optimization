@@ -13,9 +13,16 @@ logger = logging.getLogger(__name__)
 
 def prepare_case(str_case_id: str, d_case: dict, base_dir: Path):
 
-    # Create run directory and copy contents from base case____________________________________________________________
+    # Create run directory and copy contents from base case________________________________________
     case_dir  = base_dir / Path(str_case_id)
     base_case = base_dir / Path("case_xxxx")
+
+    state_file = case_dir / "state.txt"
+    if state_file.exists() and state_file.read_text() != "":
+        state = state_file.read_text().strip()
+        logger.warning(f"Existing run detected - state: {state} - skipping prepare_case")
+        return 1
+
     if case_dir.exists():
         shutil.rmtree(case_dir)
 
@@ -23,8 +30,7 @@ def prepare_case(str_case_id: str, d_case: dict, base_dir: Path):
 
     logger.info("Created case directory %s", case_dir)
 
-
-    # Copy STL________________________________________________________________________________________________________
+    # Copy STL_____________________________________________________________________________________
     d_geo = {k.removeprefix("geo_"): v for k, v in d_case.items() if k.startswith("geo_")}
     stl_path = case_dir / "constant/triSurface" / "pintle.stl"
     # _, rev_angle = build_pintle_stl(**d_geo, output_stl=stl_path)
@@ -37,7 +43,7 @@ def prepare_case(str_case_id: str, d_case: dict, base_dir: Path):
     logger.info("Created STL at: %s", stl_path)
 
 
-    # Modify mass flow inlet values____________________________________________________________________________________
+    # Modify mass flow inlet values________________________________________________________________
     mdo_cfd = d_case["mdo"] * rev_angle / (2*np.pi)
     mdf_cfd = np.sqrt(d_case["roo"] / d_case["rof"]) * d_case["mdf"] * rev_angle / (2*np.pi)
 
@@ -59,18 +65,18 @@ def prepare_case(str_case_id: str, d_case: dict, base_dir: Path):
     )
     
 
-    # Modify fluid properties as entered_______________________________________________________________________________
+    # Modify fluid properties as entered___________________________________________________________
     subprocess.run(f"foamDictionary constant/transportProperties -entry fluid.rho -set {d_case['roo']:.5f}",
                     cwd=case_dir, shell=True, check=True, capture_output=True)
 
     logger.info("Modified fluid properties: fluid rho: %.3f", d_case['roo'])
 
 
-    # Modify block mesh dict to the correct wedge and diameter_________________________________________________________
+    # Modify block mesh dict to the correct wedge and diameter_____________________________________
     write_block_mesh_dict(case_dir=case_dir, rev_angle=rev_angle, r_out=d_geo["D_d"]/2+1e-2, x_min=-d_geo["L_x"]-1e-2, x_max=d_geo["L_d"]+1e-2, r_in=0.3*d_geo["D_d"]/2)
 
 
-    # Modify fluid domain intialization________________________________________________________________________________
+    # Modify fluid domain intialization____________________________________________________________
     v_f_cfd = (np.sqrt(d_case["roo"] / d_case["rof"]) * d_case["mdf"]) / (d_case["roo"] * np.pi * d_geo["t_a"] * (d_geo["D_p"] + d_geo["t_a"]))
     v_p_cfd = d_case["mdo"] / (d_case["roo"] * 0.25 * np.pi * (d_geo["D_p"] - 2 * d_geo["w_p"])**2)     # fluid plug velocity in pintle (not ox. injection)
 
@@ -90,6 +96,10 @@ def prepare_case(str_case_id: str, d_case: dict, base_dir: Path):
         v_f_cfd,
         v_p_cfd,
     )
+
+    state_file.write_text("prepared")
+
+
 
 # Helper functions_____________________________________________________________________________________________________
 
@@ -269,7 +279,7 @@ regions
 #XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX#
 #################################################################################################################################
 
-def run_case(str_case_id: str, base_dir: Path):
+def run_case(str_case_id: str, base_dir: Path, end_time: float, balance_int: float):
 
     case_dir  = base_dir / Path(str_case_id)
     os.chdir(case_dir)
@@ -294,7 +304,20 @@ def run_case(str_case_id: str, base_dir: Path):
         return times
     #_____________________________________________________________________________________
 
-    if not (case_dir / "processor0").is_dir():
+    state_file = case_dir / "state.txt"
+
+    if not state_file.exists():
+        logger.error("No state detected - aborting")
+        return -1
+    state = state_file.read_text().strip()
+
+    if state == "prepared":
+
+        for p in case_dir.glob("processor*"):
+            shutil.rmtree(p)
+        if (case_dir / "0").is_dir():
+            shutil.rmtree(case_dir / "0")
+
         print("📂 Created 0 dir copy")
         if not os.path.isdir("0"): subprocess.run("cp -r 0.orig 0", shell=True, check=True)
 
@@ -324,16 +347,17 @@ def run_case(str_case_id: str, base_dir: Path):
 
         print("🔪 Distributing initial fields to the existing processor meshes")
         subprocess.run("decomposePar -force -fields >> log.init 2>&1", shell=True, check=True)
+        state = "decomposed"
+        state_file.write_text(state)
+
     else: 
-        print("Detected existing run, reading latest time")
+        print(f"Detected existing run state:{state}, reading latest time")
 
     print("🌟 Start time loop")
-    end_time = 0.006
-    balance_int = 10e-4
     current_time = latest_time()
     ctrl_dict = case_dir / "system/controlDict"
 
-    while current_time < end_time - 1e-10:
+    while (current_time < end_time - 1e-10) or (state in {"ran", "reconstructed par mesh"}):
 
         if not ((current_time % balance_int) < 1e-7 or (balance_int - (current_time % balance_int)) < 1e-7):
             next_time = math.ceil(current_time / balance_int) * balance_int
@@ -341,16 +365,26 @@ def run_case(str_case_id: str, base_dir: Path):
         else:
             next_time = (round(current_time / balance_int) + 1) * balance_int
 
-        subprocess.run(f"foamDictionary {str(ctrl_dict)} -entry endTime -set {next_time:.16g}", shell=True, check=True)
-        subprocess.run("srun atomizationFoam -parallel > log.atomizationFoam 2>&1", shell=True, check=True)
+        if state == "decomposed":
+            subprocess.run(f"foamDictionary {str(ctrl_dict)} -entry endTime -set {next_time:.16g}", shell=True, check=True)
+            subprocess.run("srun atomizationFoam -parallel > log.atomizationFoam 2>&1", shell=True, check=True)
+            state = "ran"
+            state_file.write_text(state)
+
         current_time = latest_time()
-        subprocess.run(f"reconstructParMesh -case {str(case_dir)} > log.balance 2>&1", shell=True, check=True)
-        subprocess.run(f"reconstructPar -case {str(case_dir)} >> log.balance", shell=True, check=True)
 
-        if current_time < end_time - 1e-10:
+        if state == "ran":
+            subprocess.run(f"reconstructParMesh -case {str(case_dir)} > log.balance 2>&1", shell=True, check=True)
+            state = "reconstructed par mesh"
+            state_file.write_text(state)
+
+        if state == "reconstructed par mesh":
+            subprocess.run(f"reconstructPar -case {str(case_dir)} >> log.balance 2>&1", shell=True, check=True)
+            state = "reconstructed par"
+            state_file.write_text(state)
+
+        if (current_time < end_time - 1e-10) and (state == "reconstructed par"):
             # subprocess.run("topoSet -latestTime >> log.balance 2>&1", shell=True, check=True)
-            subprocess.run(f"decomposePar -force -latestTime -case {str(case_dir)} >> log.balance", shell=True, check=True)
-
-        if current_time < next_time - 1e-10:
-            print("Detected abort: Terminating run")
-            sys.exit(1)
+            subprocess.run(f"decomposePar -force -latestTime -case {str(case_dir)} >> log.balance 2>&1", shell=True, check=True)
+            state = "decomposed"
+            state_file.write_text(state)
