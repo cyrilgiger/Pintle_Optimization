@@ -1,6 +1,7 @@
 import os
 import json
 import subprocess
+from collections import Counter
 from datetime import datetime
 
 import dash
@@ -26,7 +27,7 @@ from datetime import datetime
 remote_dir = sys.argv[1]
 job_filter = sys.argv[2]
 cases_dir = os.path.join(remote_dir, "cases")
-of_logs = ["log.atomizationFoam", "log.init", "log.balance"]
+of_logs = ["log.atomizationFoam", "log.init", "log.balance", "log.postprocess"]
 
 def expand_array(spec):
     spec = spec.strip("[]").split("%")[0]
@@ -50,6 +51,17 @@ def quick_tail(path, max_bytes=6144):
             return f.read().decode("utf-8", errors="replace")
     except Exception:
         return ""
+
+def read_state_file(case_dir):
+    state_path = os.path.join(case_dir, "state.txt")
+    if not os.path.isfile(state_path):
+        return "-"
+    try:
+        with open(state_path, "r", encoding="utf-8", errors="replace") as f:
+            lines = [ln.strip() for ln in f.read().splitlines() if ln.strip()]
+            return lines[0] if lines else "-"
+    except Exception:
+        return "read-error"
 
 slurm_tasks = {}
 try:
@@ -94,6 +106,7 @@ rows = []
 for tid in sorted(task_ids):
     case_name = "case_{:04d}".format(tid)
     case_dir = os.path.join(cases_dir, case_name)
+    solver_state = read_state_file(case_dir)
 
     out_matches = glob.glob(os.path.join(remote_dir, "job_*_{}.out".format(tid)))
     err_matches = glob.glob(os.path.join(remote_dir, "job_*_{}.err".format(tid)))
@@ -137,14 +150,22 @@ for tid in sorted(task_ids):
         runtime = "-"
         err_tail = quick_tail(latest_err)
         foam_tail = quick_tail(os.path.join(case_dir, "log.atomizationFoam"))
+        post_tail = quick_tail(os.path.join(case_dir, "log.postprocess"))
         has_err = any(
             k in err_tail
             for k in ["FOAM FATAL ERROR", "CANCELLED", "TIME LIMIT", "Segmentation fault", "Traceback"]
         )
+        clean_end = (
+            "\nEnd" in foam_tail
+            or foam_tail.strip().endswith("End")
+            or "\nEnd" in post_tail
+            or post_tail.strip().endswith("End")
+            or solver_state.lower() in ("completed", "done", "finished")
+        )
         if has_err:
             status = "FAILED"
             note = "Error detected in .err"
-        elif "\nEnd" in foam_tail or foam_tail.strip().endswith("End"):
+        elif clean_end:
             status = "COMPLETED"
             note = "Finished cleanly"
         elif latest_out:
@@ -159,6 +180,7 @@ for tid in sorted(task_ids):
         "case_name": case_name,
         "job_id": job_id,
         "status": status,
+        "solver_state": solver_state,
         "runtime": runtime,
         "stage": stage,
         "note": note,
@@ -205,12 +227,24 @@ def tail_file(filepath, n_lines):
     except Exception as e:
         return "[Error reading log: {}]".format(e)
 
+state_path = os.path.join(case_dir, "state.txt")
+solver_state = "-"
+if os.path.isfile(state_path):
+    try:
+        with open(state_path, "r", encoding="utf-8", errors="replace") as f:
+            lines = [ln.strip() for ln in f.read().splitlines() if ln.strip()]
+            if lines:
+                solver_state = lines[0]
+    except Exception:
+        pass
+
 out_matches = glob.glob(os.path.join(remote_dir, "job_*_{}.out".format(task_id)))
 err_matches = glob.glob(os.path.join(remote_dir, "job_*_{}.err".format(task_id)))
 latest_out = max(out_matches, key=os.path.getmtime) if out_matches else None
 latest_err = max(err_matches, key=os.path.getmtime) if err_matches else None
 
 payload = {
+    "solver_state": solver_state,
     "out_name": os.path.basename(latest_out) if latest_out else "job_*_{}.out (missing)".format(task_id),
     "err_name": os.path.basename(latest_err) if latest_err else "job_*_{}.err (missing)".format(task_id),
     "out_text": tail_file(latest_out, max_lines),
@@ -219,6 +253,7 @@ payload = {
         "log.atomizationFoam": tail_file(os.path.join(case_dir, "log.atomizationFoam"), max_lines),
         "log.init": tail_file(os.path.join(case_dir, "log.init"), max_lines),
         "log.balance": tail_file(os.path.join(case_dir, "log.balance"), max_lines),
+        "log.postprocess": tail_file(os.path.join(case_dir, "log.postprocess"), max_lines),
     },
 }
 print(json.dumps(payload))
@@ -231,7 +266,7 @@ print(json.dumps(payload))
 def run_remote_python(script: str, args: list[str]) -> tuple[dict | None, str | None]:
     cmd = ["ssh", "-o", f"ConnectTimeout={SSH_TIMEOUT}", "-o", "BatchMode=yes"]
 
-    # Reuse single SSH socket on Linux/WSL2 so 5s refreshes take ~40ms
+    # Reuse single SSH socket on Linux/WSL2 so refreshes take ~40ms
     if os.name == "posix":
         cmd.extend([
             "-o", "ControlMaster=auto",
@@ -285,6 +320,23 @@ def status_badge(status: str) -> dbc.Badge:
     return dbc.Badge(status, color=colors.get(status, "secondary"), className="px-2 py-1")
 
 
+def solver_state_badge(state: str) -> dbc.Badge:
+    if not state or state == "-":
+        return dbc.Badge("-", color="dark", className="px-2 py-1 text-muted")
+    low = state.lower()
+    if "post" in low:
+        color = "primary"
+    elif any(k in low for k in ("done", "complete", "finish")):
+        color = "info"
+    elif any(k in low for k in ("fail", "err", "abort")):
+        color = "danger"
+    elif any(k in low for k in ("atom", "run", "solve")):
+        color = "success"
+    else:
+        color = "secondary"
+    return dbc.Badge(state, color=color, className="px-2 py-1")
+
+
 app.layout = dbc.Container(
     fluid=True,
     className="py-4 px-4",
@@ -326,7 +378,7 @@ app.layout = dbc.Container(
         # SSH Error Banner (hidden when healthy)
         html.Div(id="ssh-error-banner"),
 
-        # Summary KPI Cards
+        # Summary KPI Cards + state.txt Breakdown
         html.Div(id="summary-cards", className="mb-4"),
 
         # Cases Table
@@ -456,6 +508,7 @@ app.layout = dbc.Container(
                                         dbc.Tab(label="log.atomizationFoam", tab_id="log.atomizationFoam"),
                                         dbc.Tab(label="log.init", tab_id="log.init"),
                                         dbc.Tab(label="log.balance", tab_id="log.balance"),
+                                        dbc.Tab(label="log.postprocess", tab_id="log.postprocess"),
                                     ],
                                 ),
                                 html.Pre(
@@ -572,15 +625,41 @@ def refresh_dashboard(_, __, selected_task_id):
         "FAILED": sum(1 for c in cases if c["status"] == "FAILED"),
     }
 
-    cards = dbc.Row(
-        className="g-3",
-        children=[
-            dbc.Col(dbc.Card(dbc.CardBody([html.Small("Total Cases", className="text-muted"), html.H4(counts["TOTAL"], className="mb-0")])), xs=6, md=True),
-            dbc.Col(dbc.Card(dbc.CardBody([html.Small("Running", className="text-success"), html.H4(counts["RUNNING"], className="mb-0 text-success")])), xs=6, md=True),
-            dbc.Col(dbc.Card(dbc.CardBody([html.Small("Pending", className="text-warning"), html.H4(counts["PENDING"], className="mb-0 text-warning")])), xs=6, md=True),
-            dbc.Col(dbc.Card(dbc.CardBody([html.Small("Completed", className="text-info"), html.H4(counts["COMPLETED"], className="mb-0 text-info")])), xs=6, md=True),
-            dbc.Col(dbc.Card(dbc.CardBody([html.Small("Failed", className="text-danger"), html.H4(counts["FAILED"], className="mb-0 text-danger")])), xs=6, md=True),
-        ],
+    state_counts = Counter(c.get("solver_state", "-") for c in cases)
+    state_pills = []
+    for st_label, st_count in sorted(state_counts.items(), key=lambda x: (-x[1], x[0])):
+        state_pills.append(
+            html.Span(
+                className="d-inline-flex align-items-center gap-1 me-2 mb-1",
+                children=[
+                    solver_state_badge(st_label),
+                    html.Span(f"×{st_count}", className="small fw-semibold text-light"),
+                ],
+            )
+        )
+
+    cards = html.Div(
+        [
+            dbc.Row(
+                className="g-3 mb-2",
+                children=[
+                    dbc.Col(dbc.Card(dbc.CardBody([html.Small("Total Cases", className="text-muted"), html.H4(counts["TOTAL"], className="mb-0")])), xs=6, md=True),
+                    dbc.Col(dbc.Card(dbc.CardBody([html.Small("Running", className="text-success"), html.H4(counts["RUNNING"], className="mb-0 text-success")])), xs=6, md=True),
+                    dbc.Col(dbc.Card(dbc.CardBody([html.Small("Pending", className="text-warning"), html.H4(counts["PENDING"], className="mb-0 text-warning")])), xs=6, md=True),
+                    dbc.Col(dbc.Card(dbc.CardBody([html.Small("Completed", className="text-info"), html.H4(counts["COMPLETED"], className="mb-0 text-info")])), xs=6, md=True),
+                    dbc.Col(dbc.Card(dbc.CardBody([html.Small("Failed", className="text-danger"), html.H4(counts["FAILED"], className="mb-0 text-danger")])), xs=6, md=True),
+                ],
+            ),
+            dbc.Card(
+                dbc.CardBody(
+                    className="py-2 px-3 d-flex flex-wrap align-items-center gap-2",
+                    children=[
+                        html.Small("Solver State (state.txt):", className="text-muted fw-semibold me-1"),
+                        *(state_pills if state_pills else [html.Small("No cases found", className="text-muted")]),
+                    ],
+                )
+            ),
+        ]
     )
 
     if not cases:
@@ -595,7 +674,8 @@ def refresh_dashboard(_, __, selected_task_id):
                     html.Th("Case"),
                     html.Th("Array ID"),
                     html.Th("Job ID"),
-                    html.Th("Status"),
+                    html.Th("Slurm Status"),
+                    html.Th("State (state.txt)"),
                     html.Th("Runtime"),
                     html.Th("Latest OpenFOAM Stage"),
                     html.Th("Info"),
@@ -615,6 +695,7 @@ def refresh_dashboard(_, __, selected_task_id):
                         html.Td(str(c["task_id"])),
                         html.Td(c["job_id"]),
                         html.Td(status_badge(c["status"])),
+                        html.Td(solver_state_badge(c.get("solver_state", "-"))),
                         html.Td(c["runtime"]),
                         html.Td(c["stage"]),
                         html.Td(html.Small(c["note"], className="text-muted")),
@@ -665,10 +746,11 @@ def update_log_viewer(task_id, _, __, active_of_tab, max_lines):
             f"[SSH Error: {err}]",
         )
 
+    solver_state = payload.get("solver_state", "-")
     of_logs = payload.get("of_logs", {})
     return (
         {"display": "block"},
-        f"{case_name} (Task ID {task_id})",
+        f"{case_name} (Task ID {task_id})  —  state.txt: {solver_state}",
         f"Output Log: {payload.get('out_name')}",
         payload.get("out_text", ""),
         f"Error Log: {payload.get('err_name')}",

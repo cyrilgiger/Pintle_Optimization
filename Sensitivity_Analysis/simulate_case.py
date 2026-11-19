@@ -16,9 +16,9 @@ def simulate_case(case_id: int):
     
     prepare_case(str_case_id, d_case, base_dir)
 
-    run_case(str_case_id, base_dir, end_time=4e-3, balance_int=10e-4, keep_all=True)
+    run_case(str_case_id, base_dir, end_time=4e-3, balance_int=5e-4, keep_all=False)
 
-    get_spray_vals(str_case_id, base_dir, plane_x=35e-3, d_case=d_case, N_bins=15)
+    get_spray_vals(str_case_id, base_dir, plane_x=d_case["geo_L_p"] + 25e-3, d_case=d_case, N_bins=15)
 
 
 if __name__ == "__main__":

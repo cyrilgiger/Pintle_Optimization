@@ -1,5 +1,6 @@
 #%% imports
 import os
+import logging
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -8,6 +9,11 @@ from scipy.spatial import KDTree
 from joblib import Parallel, delayed
 from Functions.build_pintle_stl import build_pintle_stl
 from Functions.lhs_fun import get_dim_from_non_dim, verify_physics
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(levelname)s %(name)s.%(funcName)s: %(message)s",
+)
 
 #%% inputs
 
@@ -29,7 +35,7 @@ mdf = 1.01              # [kg/s] , Ethanol mass flow rate
 rof = 810.0             # [kg/m3], Ethanol density
 
 # Domain Dimensions 
-L_d = 70.0e-3           # [m]    , Domain length
+L_d = 85.0e-3           # [m]    , Domain length
 D_d = 110.85e-3         # [m]    , Domain diameter
 L_x = 10.0e-3           # [m]    , extension of ox and f channels in -x
 

@@ -1,11 +1,12 @@
 # imports
 import os
 import re
+import shutil
 import numpy as np
 import pandas as pd
 import logging
+import subprocess
 from pathlib import Path
-import matplotlib.pyplot as plt
 
 logger = logging.getLogger(__name__)
 
@@ -16,11 +17,33 @@ def get_spray_vals(str_case_id: str, base_dir: Path, plane_x: float, d_case: dic
     state_file = case_dir / "state.txt"
     if state_file.exists():
         state = state_file.read_text().strip()
-        if state != "run complete":
-            logger.warning(f"Unfinished run at state {state} - skipping post processing")
+    else:
+        logger.warning(f"Could not find state file - terminating post processing")
+        return
+
+    # Run VOF post processing__________________________________________________________________________________________
+
+    ctrl_dict = case_dir / "system/controlDict"
+
+    if state == "run complete":
+        subprocess.run(f"foamDictionary {str(ctrl_dict)} -entry functions/planeDropletAnalysis/enabled -set true -disableFunctionEntries", shell=True, check=True)
+
+        subprocess.run(f"foamDictionary {str(ctrl_dict)} -entry functions/planeDropletAnalysis/plane_x -set {plane_x} -disableFunctionEntries", shell=True, check=True)
+
+        subprocess.run(f'srun atomizationFoam -parallel -postProcess > log.postprocess 2>&1', cwd=case_dir, shell=True, check=True)
+
+        state = "vof post processed"
+        state_file.write_text(state)
+
+    elif state == "vof post processed":
+        vof_file = case_dir / "postProcessing" / "plane_droplets.csv"
+        if vof_file.exists():
+            logger.warning("Found state as 'vof post processed' - skipping vof processing.")
+        else:
+            logger.warning(f"State as 'vof post processed' but no file found at {vof_file} - terminating post processing")
             return
     else:
-        logger.warning(f"Could not find state file - skipping post processing")
+        logger.warning(f"Simulation did not finish as expected - found state {state} - terminating post processing")
         return
 
     # Import VOF stats on plane________________________________________________________________________________________
@@ -53,10 +76,12 @@ def get_spray_vals(str_case_id: str, base_dir: Path, plane_x: float, d_case: dic
 
     angle_m, angle_t = calculate_spray_angle(df_lag=df_lag, df_vof=df_vof)
 
+    dp = get_delta_p(point=(0, d_case["geo_D_p"] / 4, d_case["geo_D_p"] / 4), case_dir=case_dir)
+
     # Save outputs_____________________________________________________________________________________________________
     common_cols = ['t', 'x', 'y', 'z', 'r', 'th', 'vx', 'vy', 'vz', 'vr', 'A', 'V', 'source']
     df_all = pd.concat([df_lag[common_cols], df_vof[common_cols]], ignore_index=True)
-    df_all.to_parquet(case_dir / "postProcessing/crossed_droplets.parquet", index=False)
+    # df_all.to_parquet(case_dir / "postProcessing/crossed_droplets.parquet", index=False)
 
     out_dir = case_dir / "results"
     out_dir.mkdir(exist_ok=True)
@@ -76,6 +101,7 @@ def get_spray_vals(str_case_id: str, base_dir: Path, plane_x: float, d_case: dic
         "SMD_mean": SMD_mean,
         "spray_angle_deg": np.degrees(angle_m),
         "uniformity_std": std_final_v_rel,
+        "ox_dp": dp,
         "V_total": df_all["V"].sum(),
         "V_lag_frac": df_lag["V"].sum() / df_all["V"].sum() if df_all["V"].sum() > 0 else np.nan,
         "n_droplets": len(df_all),
@@ -174,7 +200,56 @@ def calculate_spray_angle(df_lag: pd.DataFrame, df_vof: pd.DataFrame):
     return angle_m, angle_t
 
 
+# ---------------------------------------------------------------------------------------------------------------------
+# Get delta P
+# ---------------------------------------------------------------------------------------------------------------------
 
+def get_delta_p(point: tuple[float, float, float], case_dir: Path):
+    x,y,z = point
+    content = f"""FoamFile
+{{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      probes;
+}}
+
+type            probes;
+libs            ("libsampling.so");
+fields          (p);
+probeLocations  (({x} {y} {z}));
+"""
+
+    (case_dir / "system" / "probes").write_text(content)
+
+    probes_out = case_dir / "postProcessing" / "probes"
+    if probes_out.exists():
+        shutil.rmtree(probes_out)
+
+    subprocess.run(
+        "srun atomizationFoam -parallel -postProcess -func probes -noFunctionObjects -latestTime >> log.postprocess 2>&1",
+        cwd=case_dir,
+        shell=True,
+        check=True,
+    )
+
+    if not probes_out.exists():
+        logger.warning(f"No probes output file was created at: {probes_out}")
+        return np.nan
+
+    time_dirs = [d for d in probes_out.iterdir() if d.is_dir()]
+    if not time_dirs:
+        raise RuntimeError("postProcess finished, but no probe output was written.")
+
+    data_file = time_dirs[0] / "p"
+    for line in data_file.read_text().splitlines():
+        line = line.strip()
+        if line and not line.startswith("#"):
+            # Line format: <time>   <value>
+            return float(line.split()[1])
+
+    logger.warning(f"No valid pressure value found in {data_file}")
+    return np.nan
 # _____________________________________________________________________________________________________________________
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Helper Functions

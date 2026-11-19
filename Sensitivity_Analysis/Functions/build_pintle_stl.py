@@ -55,6 +55,8 @@ def build_pintle_stl(
     y3 = a1c[1] * r_t / (r_g + r_t)
     xi = np.sqrt((r_g + r_t)**2 - a1c[1]**2)
     dx3 = xi * r_t / (r_g + r_t)
+    if y3 > D_p/2 - w_p:
+        raise RuntimeError("PT3 of guide radius evaluates as outside of pintle")
     pt3 = (a1c[0] + xi - dx3, y3, 0)
 
     a2c = (a1c[0] + xi, 0, 0)

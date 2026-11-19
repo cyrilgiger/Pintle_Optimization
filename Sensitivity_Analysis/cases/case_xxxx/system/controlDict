@@ -38,9 +38,9 @@ runTimeModifiable yes;
 
 adjustTimeStep  yes;
 
-maxCo           0.5;
+maxCo           0.7;
 
-maxAlphaCo      0.2;
+maxAlphaCo      0.5;
 
 maxDeltaT       1;
 
@@ -56,7 +56,7 @@ functions
 {
     fieldMinMax1
     {   
-        enabled         true;
+        enabled         false;
         type            fieldMinMax;
         libs            ( fieldFunctionObjects );
         writeControl    timeStep;
@@ -71,10 +71,14 @@ functions
         libs            ( "libutilityFunctionObjects.so" );
         name            planeDropletAnalysis;
         writeControl    outputTime;
+
+        plane_x         35e-3;
+
         codeExecute     #{  
             // Analysis parameters
-            scalar plane_x    = 35e-3;
+            scalar plane_x    = $plane_x;
             scalar alphaLimit = 0.002;
+
             // -----------------------------------------------------------------
             // 1. Mesh and Time setup
             // -----------------------------------------------------------------

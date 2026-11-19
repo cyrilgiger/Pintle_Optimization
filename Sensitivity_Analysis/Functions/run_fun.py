@@ -373,7 +373,7 @@ def run_case(str_case_id: str, base_dir: Path, end_time: float, balance_int: flo
     current_time = latest_time()
     ctrl_dict = case_dir / "system/controlDict"
 
-    while (current_time < end_time - 1e-10) or (state in {"ran", "reconstructed par mesh"}):
+    while ((current_time < end_time - 1e-7) or (state in {"ran", "reconstructed par mesh"})) and state not in {"run complete", "vof post processed"}:
 
         if not ((current_time % balance_int) < 1e-7 or (balance_int - (current_time % balance_int)) < 1e-7):
             next_time = math.ceil(current_time / balance_int) * balance_int
@@ -420,14 +420,10 @@ def run_case(str_case_id: str, base_dir: Path, end_time: float, balance_int: flo
             state = "decomposed"
             state_file.write_text(state)
 
-    # Get VOF post processing
-    subprocess.run(f'foamDictionary {str(ctrl_dict)} -entry functions/planeDropletAnalysis/enabled -set true', shell=True, check=True)
-    subprocess.run(f'srun atomizationFoam -parallel -postProcess > log.postprocess 2>&1', shell=True, check=True)
-
     current_time = latest_time()
     if current_time >= end_time - 1e-7:
         logger.info("Ran: %s", str_case_id)
         state = "run complete"
         state_file.write_text(state)
     else:
-        logger.warning(f"Loop terminated at time {current_time:.4g} instead of end time {end_time:.4g}")
+        logger.warning(f"Loop terminated at time {current_time:.4g} instead of end time {end_time:.4g} with state '{state}'")
